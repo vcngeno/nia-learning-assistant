@@ -1,14 +1,12 @@
 from typing import Dict, List, Tuple
 import re
-from anthropic import Anthropic
 import os
 
 class ChildSafetyFilter:
     """Multi-layer content safety system for child interactions"""
     
     def __init__(self):
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        
+        # Safety filter doesn't need API key
         self.blocked_keywords = [
             "violence", "weapon", "blood", "kill", "murder",
             "sexual", "porn", "nude", "sex",

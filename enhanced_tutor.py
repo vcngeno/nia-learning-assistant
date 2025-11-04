@@ -1,4 +1,4 @@
-from anthropic import Anthropic
+from openai import OpenAI
 from typing import Dict, List, Optional
 from content_summarizer import NiaSummarizer
 from safety_filter import ChildSafetyFilter
@@ -8,7 +8,10 @@ class NiaTutor:
     """Nia - An Intelligent Learning Summarization Assistant"""
     
     def __init__(self, safety_filter: ChildSafetyFilter):
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        self.client = OpenAI(api_key=api_key)
         self.safety = safety_filter
         self.summarizer = NiaSummarizer()
         self._load_educational_content()
@@ -92,12 +95,12 @@ Create 3 comprehension questions for a {student['grade']}th grader.
 Format: Just the questions, numbered 1-3."""
 
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=300,
-                messages=[{"role": "user", "content": questions_prompt}]
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": questions_prompt}],
+                max_tokens=300
             )
-            practice_questions = response.content[0].text
+            practice_questions = response.choices[0].message.content
         except:
             practice_questions = "Questions coming soon!"
         
@@ -119,15 +122,17 @@ Format: Just the questions, numbered 1-3."""
         system_prompt = self.build_system_prompt(student)
         messages = self._build_message_history(student, message)
         
+        # Add system message at the beginning
+        full_messages = [{"role": "system", "content": system_prompt}] + messages
+        
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=800,
-                system=system_prompt,
-                messages=messages
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=full_messages,
+                max_tokens=800
             )
             
-            ai_response = response.content[0].text
+            ai_response = response.choices[0].message.content
             
             is_safe, _ = self.safety.validate_output(ai_response, student['reading_level'])
             

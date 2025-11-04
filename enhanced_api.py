@@ -22,12 +22,7 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL,
-        "http://localhost:3000",
-        "https://*.railway.app",
-        "https://*.vercel.app",
-    ],
+    allow_origins=["*"],  # Will restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,7 +58,8 @@ def read_root():
     return {
         "message": "Welcome to Nia - Your Intelligent Learning Assistant",
         "version": "1.0.0",
-        "project_lead": "Vanessa Ngeno"
+        "project_lead": "Vanessa Ngeno",
+        "status": "operational"
     }
 
 @app.post("/students/create")
