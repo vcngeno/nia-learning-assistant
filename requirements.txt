@@ -1,0 +1,9 @@
+anthropic==0.39.0
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-dotenv==1.0.0
+pydantic==2.10.3
+gensim==4.3.3
+nltk==3.9.1
+numpy==1.26.4
+python-multipart==0.0.12
