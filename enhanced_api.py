@@ -10,6 +10,24 @@ from dotenv import load_dotenv
 from safety_filter import ChildSafetyFilter
 from enhanced_tutor import NiaTutor
 
+import nltk
+
+# Download required NLTK data
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab', quiet=True)
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
+
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+
 load_dotenv()
 
 app = FastAPI(
