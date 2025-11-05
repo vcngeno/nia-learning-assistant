@@ -40,10 +40,15 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Will restrict in production
+    allow_origins=[
+        "http://localhost:3000",  # local development
+        "https://web-production-a4ec.up.railway.app",  # your backend
+        "https://*.railway.app",  # your future frontend on Railway
+        "*"  # Temporarily keep this for testing
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 safety_filter = ChildSafetyFilter()
