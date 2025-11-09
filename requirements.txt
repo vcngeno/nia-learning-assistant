@@ -7,7 +7,6 @@ pydantic==2.10.3
 gensim==4.3.3
 nltk==3.9.1
 numpy==1.26.4
-python-multipart==0.0.12
 pymongo==4.15.3
 dnspython==2.8.0
 motor==3.7.1
