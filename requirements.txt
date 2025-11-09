@@ -8,3 +8,15 @@ gensim==4.3.3
 nltk==3.9.1
 numpy==1.26.4
 python-multipart==0.0.12
+pymongo==4.15.3
+dnspython==2.8.0
+motor==3.7.1
+python-jose==3.5.0
+passlib==1.7.4
+python-multipart==0.0.20
+cryptography>=3.4.0
+bcrypt>=3.1.0
+
+# Email support (optional)
+# Uncomment if you want email notifications
+# aiosmtplib==3.0.1
