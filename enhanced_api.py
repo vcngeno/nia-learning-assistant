@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 
 from safety_filter import ChildSafetyFilter
 from enhanced_tutor import NiaTutor
+# ✨ NEW: Import the question handler
+from question_handler import classify_question, get_response_strategy
 
 import nltk
 
@@ -33,7 +35,7 @@ load_dotenv()
 app = FastAPI(
     title="Nia API",
     description="An Intelligent Learning Summarization Assistant for Children",
-    version="1.0.0"
+    version="2.0.0"
 )
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -41,10 +43,10 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # local development
-        "https://web-production-a4ec.up.railway.app",  # your backend
-        "https://*.railway.app",  # your future frontend on Railway
-        "*"  # Temporarily keep this for testing
+        "http://localhost:3000",
+        "https://web-production-a4ec.up.railway.app",
+        "https://*.railway.app",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
@@ -80,9 +82,10 @@ class StudyMaterialRequest(BaseModel):
 def read_root():
     return {
         "message": "Welcome to Nia - Your Intelligent Learning Assistant",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "project_lead": "Vanessa Ngeno",
-        "status": "operational"
+        "status": "operational",
+        "features": ["intelligent_question_classification", "adaptive_responses"]
     }
 
 @app.post("/students/create")
@@ -111,15 +114,30 @@ def create_student(data: StudentCreate):
 
 @app.post("/chat")
 def chat(chat_data: ChatMessage):
+    """
+    ENHANCED: Now with intelligent question classification
+    """
     if chat_data.student_id not in students_db:
         raise HTTPException(status_code=404, detail="Student not found")
     
     student = students_db[chat_data.student_id]
-    result = tutor.chat(student, chat_data.message)
+    
+    # NEW: Classify the question type
+    question_type = classify_question(chat_data.message)
+    strategy = get_response_strategy(question_type)
+    
+    # NEW: Pass the strategy to the tutor for enhanced responses
+    result = tutor.chat(
+        student, 
+        chat_data.message,
+        question_type=question_type.value,
+        response_strategy=strategy
+    )
     
     return {
         "success": result['success'],
         "response": result['response'],
+        "question_type": question_type.value,
         "needs_intervention": result.get('needs_intervention', False),
         "timestamp": datetime.now().isoformat()
     }
@@ -165,7 +183,8 @@ def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "active_students": len(students_db),
-        "service": "Nia Learning Assistant"
+        "service": "Nia Learning Assistant",
+        "version": "2.0.0"
     }
 
 if __name__ == "__main__":

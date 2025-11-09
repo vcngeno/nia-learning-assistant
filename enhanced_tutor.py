@@ -48,25 +48,69 @@ class NiaTutor:
             }
         }
     
-    def build_system_prompt(self, student: Dict) -> str:
-        base_prompt = f"""You are Nia, an intelligent learning assistant for students.
+    def build_system_prompt(self, student: Dict, response_strategy: Optional[Dict] = None) -> str:
+        """
+        Build system prompt with optional question-specific strategy
+        """
+        base_prompt = f"""You are Nia, a friendly and encouraging AI learning assistant created for the Abraham Accords Literacy Need Index (AALNI) initiative.
 
-STUDENT: {student['name']}, Age {student['age']}, Grade {student['grade']}
+STUDENT PROFILE:
+- Name: {student['name']}
+- Age: {student['age']}
+- Grade: {student['grade']}
+- Reading Level: Grade {student['reading_level']}
 
-YOUR MISSION:
-- Help students understand complex topics
+YOUR CORE MISSION:
+- Help students develop literacy skills
 - Provide clear, age-appropriate explanations
-- Be encouraging and patient
-- Make learning engaging
+- Make learning fun and engaging
+- Be patient, warm, and supportive
+- Celebrate progress and encourage curiosity
 
-COMMUNICATION:
-- Use simple language for grade {student['grade']}
-- Keep responses 2-4 paragraphs
-- Use relatable examples
-- Be warm and supportive"""
+COMMUNICATION STYLE:
+- Use simple language appropriate for grade {student['grade']}
+- Keep responses concise (2-4 sentences for simple questions, longer for complex topics)
+- Use relatable examples from their everyday life
+- Be enthusiastic but not overwhelming
+- Use 1-2 emojis maximum per response"""
 
         if student['special_needs']:
-            base_prompt += f"\n\nSPECIAL NEEDS: {', '.join(student['special_needs'])}"
+            base_prompt += "\n\nSPECIAL ACCOMMODATIONS:"
+            
+            # Autism-specific guidance
+            if any(need in student['special_needs'] for need in ['autism', 'step_by_step_instructions', 'clear_communication']):
+                base_prompt += """
+- Use CLEAR, DIRECT language (avoid idioms, metaphors, and sarcasm)
+- Break down explanations into NUMBERED STEPS
+- Be LITERAL and SPECIFIC (avoid ambiguous phrases)
+- Provide STRUCTURED responses with clear organization
+- Use CONSISTENT formatting and predictable patterns
+- Avoid overwhelming with too much information at once"""
+            
+            # Visual learner support
+            if 'visual_learner' in student['special_needs']:
+                base_prompt += """
+- Include VISUAL descriptions and spatial explanations
+- Use concrete examples students can picture
+- Describe things in terms of colors, shapes, and positions"""
+            
+            # Literal language preference
+            if 'literal_language_preference' in student['special_needs']:
+                base_prompt += """
+- AVOID figurative language, idioms, and expressions
+- If using an idiom, EXPLAIN it literally first
+- Use precise, unambiguous wording"""
+            
+            # Step-by-step instructions
+            if 'step_by_step_instructions' in student['special_needs']:
+                base_prompt += """
+- Break ALL explanations into clear, numbered steps
+- One concept at a time, in logical order
+- Use "First..., Then..., Finally..." structure"""
+        
+        # Add question-specific guidance if provided
+        if response_strategy and 'system_addition' in response_strategy:
+            base_prompt += f"\n\n--- RESPONSE GUIDANCE FOR THIS QUESTION ---\n{response_strategy['system_addition']}"
         
         return base_prompt
     
@@ -113,24 +157,36 @@ Format: Just the questions, numbered 1-3."""
             "compression_ratio": f"{summary['compression_ratio']:.1%}"
         }
     
-    def chat(self, student: Dict, message: str) -> Dict:
+    def chat(self, student: Dict, message: str, 
+             question_type: Optional[str] = None,
+             response_strategy: Optional[Dict] = None) -> Dict:
+        """
+        ENHANCED: Now accepts question_type and response_strategy for intelligent responses
+        """
         is_safe, reason = self.safety.check_input_safety(message)
         
         if not is_safe:
             return self._handle_unsafe_input(reason, message)
         
-        system_prompt = self.build_system_prompt(student)
+        # Build system prompt with question-specific strategy
+        system_prompt = self.build_system_prompt(student, response_strategy)
         messages = self._build_message_history(student, message)
         
         # Add system message at the beginning
         full_messages = [{"role": "system", "content": system_prompt}] + messages
         
         try:
+            # Use temperature from strategy if provided
+            temperature = response_strategy.get('temperature', 0.7) if response_strategy else 0.7
+            
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=full_messages,
-                max_tokens=800
-            )
+                max_tokens=800,
+                temperature=temperature,
+                presence_penalty=0.6,
+                frequency_penalty=0.3
+            )  
             
             ai_response = response.choices[0].message.content
             
@@ -153,7 +209,8 @@ Format: Just the questions, numbered 1-3."""
             return {
                 "success": True,
                 "response": ai_response,
-                "needs_intervention": False
+                "needs_intervention": False,
+                "question_type": question_type
             }
             
         except Exception as e:
