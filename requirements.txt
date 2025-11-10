@@ -19,3 +19,4 @@ bcrypt>=3.1.0
 # Email support (optional)
 # Uncomment if you want email notifications
 # aiosmtplib==3.0.1
+email-validator
