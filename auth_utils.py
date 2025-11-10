@@ -2,6 +2,8 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 import os
+import secrets
+import time
 
 # Password hashing context - FIXED for bcrypt compatibility
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -10,6 +12,18 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+
+def generate_parent_id() -> str:
+    """Generate a unique parent ID"""
+    timestamp = int(time.time())
+    random_suffix = secrets.token_hex(4)
+    return f"parent_{timestamp}_{random_suffix}"
+
+def generate_student_id() -> str:
+    """Generate a unique student ID"""
+    timestamp = int(time.time())
+    random_suffix = secrets.token_hex(4)
+    return f"student_{timestamp}_{random_suffix}"
 
 def hash_pin(pin: str) -> str:
     """Hash a PIN for secure storage - truncate to 72 bytes for bcrypt"""
