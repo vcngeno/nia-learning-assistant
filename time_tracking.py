@@ -97,17 +97,9 @@ async def check_time_limit(student_id: str) -> dict:
     if not student:
         return {"allowed": False, "reason": "Student not found"}
     
-    parent_id = student.get("parent_id")
-    if not parent_id:
-        # No parent, no limits
-        return {"allowed": True, "time_remaining": 999}
-    
-    parent = await parents_collection.find_one({"parent_id": parent_id})
-    if not parent:
-        return {"allowed": True, "time_remaining": 999}
-    
-    preferences = parent.get("preferences", {})
-    time_limit = preferences.get("daily_time_limit", 60)
+    # Get student's settings (prioritize student-level settings)
+    allowed_hours = student.get("allowed_hours", {"start": 8, "end": 20})
+    time_limit = student.get("daily_time_limit", 60)
     
     # Check current usage
     daily_usage = student.get("daily_usage_minutes", 0)
@@ -122,8 +114,8 @@ async def check_time_limit(student_id: str) -> dict:
     
     # Check allowed hours
     current_hour = datetime.utcnow().hour
-    allowed_start = preferences.get("allowed_hours_start", 8)
-    allowed_end = preferences.get("allowed_hours_end", 20)
+    allowed_start = allowed_hours.get("start", 8)
+    allowed_end = allowed_hours.get("end", 20)
     
     if not (allowed_start <= current_hour < allowed_end):
         return {
