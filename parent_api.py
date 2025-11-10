@@ -134,6 +134,8 @@ async def create_student_for_parent(
         "reading_level": student_data.reading_level or student_data.grade,
         "special_needs": student_data.special_needs or [],
         "interests": student_data.interests or [],
+        "allowed_hours": student_data.allowed_hours.dict() if student_data.allowed_hours else {"start": 8, "end": 20},
+        "daily_time_limit": student_data.daily_time_limit or 60,
         "conversation_history": [],
         "progress": {},
         "daily_usage_minutes": 0,
