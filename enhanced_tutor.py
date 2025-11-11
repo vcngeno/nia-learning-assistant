@@ -172,6 +172,11 @@ Format: Just the questions, numbered 1-3."""
         """
         ENHANCED: Now accepts question_type and response_strategy for intelligent responses
         """
+        # Log for debugging
+        import sys
+        print(f"[CHAT] Student: {student.get('name', 'Unknown')}, Message: {message}", file=sys.stderr)
+        print(f"[CHAT] Tools available: {self.tools is not None}, Model: gpt-4o", file=sys.stderr)
+        
         is_safe, reason = self.safety.check_input_safety(message)
         
         if not is_safe:
