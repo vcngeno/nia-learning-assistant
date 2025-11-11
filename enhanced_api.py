@@ -6,6 +6,8 @@ import uvicorn
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import requests
+import json
 
 from safety_filter import ChildSafetyFilter
 from enhanced_tutor import NiaTutor
@@ -69,6 +71,83 @@ tutor = NiaTutor(safety_filter)
 
 # Legacy in-memory storage for backwards compatibility
 students_db = {}
+
+
+# ============= Weather and Date Functions =============
+def get_current_datetime():
+    """Get current date and time"""
+    now = datetime.now()
+    return {
+        "date": now.strftime("%A, %B %d, %Y"),
+        "time": now.strftime("%I:%M %p"),
+        "timezone": "EST",
+        "iso": now.isoformat()
+    }
+
+def get_weather(location: str):
+    """Get current weather for a location"""
+    api_key = os.getenv("WEATHER_API_KEY")
+    
+    if not api_key:
+        return {"error": "Weather API key not configured"}
+    
+    try:
+        response = requests.get(
+            "https://api.weatherapi.com/v1/current.json",
+            params={"key": api_key, "q": location, "aqi": "no"},
+            timeout=5
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        return {
+            "location": data["location"]["name"],
+            "country": data["location"]["country"],
+            "temperature_f": data["current"]["temp_f"],
+            "temperature_c": data["current"]["temp_c"],
+            "condition": data["current"]["condition"]["text"],
+            "humidity": data["current"]["humidity"],
+            "feels_like_f": data["current"]["feelslike_f"]
+        }
+    except Exception as e:
+        return {"error": f"Could not fetch weather: {str(e)}"}
+
+# Map function names to actual functions
+AVAILABLE_FUNCTIONS = {
+    "get_current_datetime": get_current_datetime,
+    "get_weather": get_weather
+}
+
+# Tools definition for OpenAI
+OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_datetime",
+            "description": "Get the current date and time. Use when student asks about date or time.",
+            "parameters": {"type": "object", "properties": {}, "required": []}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get current weather for a location. Use when student asks about weather.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {"type": "string", "description": "City name (e.g., 'New York')"}
+                },
+                "required": ["location"]
+            }
+        }
+    }
+]
+# ============= End Weather and Date Functions =============
+
+# Connect tools to tutor
+tutor.set_tools(OPENAI_TOOLS, AVAILABLE_FUNCTIONS)
+
 
 class StudentCreate(BaseModel):
     name: str
