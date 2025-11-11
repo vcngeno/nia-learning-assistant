@@ -3,7 +3,6 @@ from typing import Dict, List, Optional
 from content_summarizer import NiaSummarizer
 from safety_filter import ChildSafetyFilter
 import os
-import json
 
 class NiaTutor:
     """Nia - An Intelligent Learning Summarization Assistant"""
@@ -16,10 +15,6 @@ class NiaTutor:
         self.safety = safety_filter
         self.summarizer = NiaSummarizer()
         self._load_educational_content()
-        
-        # Initialize tools for function calling
-        self.available_functions = None
-        self.tools = None
     
     def _load_educational_content(self):
         sample_content = [
@@ -32,11 +27,6 @@ class NiaTutor:
             self.summarizer.create_lsi_model(sample_content)
         except:
             pass
-    
-    def set_tools(self, tools, available_functions):
-        """Set the tools and functions for function calling"""
-        self.tools = tools
-        self.available_functions = available_functions
     
     def create_student_profile(self, name: str, age: int, grade: int,
                               special_needs: Optional[List[str]] = None,
@@ -76,12 +66,6 @@ YOUR CORE MISSION:
 - Make learning fun and engaging
 - Be patient, warm, and supportive
 - Celebrate progress and encourage curiosity
-
-YOUR CAPABILITIES:
-- You have access to real-time tools to check the current date, time, and weather
-- When you receive tool results, ALWAYS use that information in your response
-- NEVER say you cannot access real-time information - you CAN through your tools
-- If a tool returns date/time/weather data, present it naturally in your answer
 
 COMMUNICATION STYLE:
 - Use simple language appropriate for grade {student['grade']}
@@ -156,7 +140,7 @@ Format: Just the questions, numbered 1-3."""
 
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": questions_prompt}],
                 max_tokens=300
             )
@@ -195,79 +179,16 @@ Format: Just the questions, numbered 1-3."""
             # Use temperature from strategy if provided
             temperature = response_strategy.get('temperature', 0.7) if response_strategy else 0.7
             
-            # Initial API call with tools
-            if self.tools:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=full_messages,
                 max_tokens=800,
                 temperature=temperature,
                 presence_penalty=0.6,
-                frequency_penalty=0.3,
-                tools=self.tools if self.tools else None
-            )
-            if hasattr(response.choices[0].message, 'tool_calls'):
+                frequency_penalty=0.3
+            )  
             
-            response_message = response.choices[0].message
-            
-            # Check if the model wants to call a function
-            if hasattr(response_message, 'tool_calls') and response_message.tool_calls and self.available_functions:
-                # Add assistant's response to messages (convert to dict format)
-                assistant_message = {
-                    "role": "assistant",
-                    "content": response_message.content,
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
-                            }
-                        } for tc in response_message.tool_calls
-                    ]
-                }
-                full_messages.append(assistant_message)
-                
-                # Process each tool call
-                for tool_call in response_message.tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
-                    
-                    # Call the actual function
-                    try:
-                        if function_name in self.available_functions:
-                            function_response = self.available_functions[function_name](**function_args)
-                        else:
-                            function_response = {"error": "Function not found"}
-                    except Exception as e:
-                        function_response = {"error": str(e)}
-                    
-                    # Add function response to messages
-                    tool_message = {
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": json.dumps(function_response)
-                    }
-                    full_messages.append(tool_message)
-                
-                # Make second API call with function results
-                for idx, msg in enumerate(full_messages):
-                    print(f"  Message {idx}: role={msg.get('role')}, content={str(msg.get('content'))[:100]}")
-                second_response = self.client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=full_messages,
-                    max_tokens=800,
-                    temperature=temperature,
-                    presence_penalty=0.6,
-                    frequency_penalty=0.3
-                )
-                
-                ai_response = second_response.choices[0].message.content
-            else:
-                # No function calling needed
-                ai_response = response_message.content
+            ai_response = response.choices[0].message.content
             
             is_safe, _ = self.safety.validate_output(ai_response, student['reading_level'])
             
