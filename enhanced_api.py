@@ -67,7 +67,6 @@ app.add_middleware(
 app.include_router(parent_router)
 
 safety_filter = ChildSafetyFilter()
-tutor = NiaTutor(safety_filter)
 
 # Legacy in-memory storage for backwards compatibility
 students_db = {}
@@ -144,6 +143,11 @@ OPENAI_TOOLS = [
     }
 ]
 # ============= End Weather and Date Functions =============
+
+# Connect tools to tutor
+
+# Initialize tutor
+tutor = NiaTutor(safety_filter)
 
 # Connect tools to tutor
 tutor.set_tools(OPENAI_TOOLS, AVAILABLE_FUNCTIONS)
