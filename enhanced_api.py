@@ -406,6 +406,17 @@ async def process_study_material(data: StudyMaterialRequest):
         "compression_ratio": result['compression_ratio']
     }
 
+
+@app.get("/debug/tools")
+def debug_tools():
+    """Debug endpoint to check if tools are configured"""
+    return {
+        "tools_configured": tutor.tools is not None,
+        "num_tools": len(tutor.tools) if tutor.tools else 0,
+        "available_functions": list(tutor.available_functions.keys()) if tutor.available_functions else [],
+        "model": "gpt-4o"
+    }
+
 @app.get("/health")
 def health_check():
     return {
