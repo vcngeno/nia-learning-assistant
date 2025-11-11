@@ -15,6 +15,10 @@ class NiaTutor:
         self.safety = safety_filter
         self.summarizer = NiaSummarizer()
         self._load_educational_content()
+        
+        # Initialize tools for function calling
+        self.available_functions = None
+        self.tools = None
     
     def _load_educational_content(self):
         sample_content = [
@@ -27,6 +31,11 @@ class NiaTutor:
             self.summarizer.create_lsi_model(sample_content)
         except:
             pass
+    
+    def set_tools(self, tools, available_functions):
+        """Set the tools and functions for function calling"""
+        self.tools = tools
+        self.available_functions = available_functions
     
     def create_student_profile(self, name: str, age: int, grade: int,
                               special_needs: Optional[List[str]] = None,
