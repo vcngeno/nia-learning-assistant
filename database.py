@@ -1,56 +1,35 @@
-from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo import MongoClient
-import os
-from datetime import datetime
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
+from config import settings
+import logging
 
-# MongoDB connection
-MONGODB_URL = os.getenv("MONGODB_URL")
-if not MONGODB_URL:
-    raise ValueError("MONGODB_URL not set in environment variables")
+logger = logging.getLogger(__name__)
 
-DATABASE_NAME = "nia_learning"
+engine = create_async_engine(
+    settings.async_database_url,
+    echo=settings.DEBUG,
+    future=True,
+    pool_pre_ping=True,
+)
 
-# Async client for FastAPI
-async_client = AsyncIOMotorClient(MONGODB_URL)
-async_db = async_client[DATABASE_NAME]
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+    autocommit=False,
+)
 
-# Collections
-parents_collection = async_db["parents"]
-students_collection = async_db["students"]
-activity_logs_collection = async_db["activity_logs"]
-sessions_collection = async_db["sessions"]
+Base = declarative_base()
 
-# Sync client for non-async operations
-sync_client = MongoClient(MONGODB_URL)
-sync_db = sync_client[DATABASE_NAME]
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 async def init_db():
-    """Initialize database with indexes"""
-    try:
-        # Parent indexes
-        await parents_collection.create_index("email", unique=True)
-        await parents_collection.create_index("parent_id", unique=True)
-        
-        # Student indexes
-        await students_collection.create_index("student_id", unique=True)
-        await students_collection.create_index("parent_id")
-        
-        # Activity log indexes
-        await activity_logs_collection.create_index("student_id")
-        await activity_logs_collection.create_index("timestamp")
-        await activity_logs_collection.create_index([("student_id", 1), ("timestamp", -1)])
-        
-        print("✅ Database initialized successfully!")
-        return True
-    except Exception as e:
-        print(f"❌ Database initialization error: {e}")
-        return False
-
-async def close_db():
-    """Close database connections"""
-    async_client.close()
-    sync_client.close()
-
-def get_db():
-    """Get database instance"""
-    return async_db
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("✅ Database tables created successfully")
