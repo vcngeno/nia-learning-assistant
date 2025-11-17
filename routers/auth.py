@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from database import get_db
-from models import Parent, Child
+from models import User, Child  # Changed from Parent to User
 from schemas import ParentCreate, ParentLogin, ChildLogin, Token
 from datetime import datetime, timedelta
 from typing import Optional
@@ -42,24 +42,24 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 @router.post("/parent/register", status_code=status.HTTP_201_CREATED)
 def register_parent(parent_data: ParentCreate, db: Session = Depends(get_db)):
     # Check if email already exists
-    existing_parent = db.query(Parent).filter(Parent.email == parent_data.email).first()
+    existing_parent = db.query(User).filter(User.email == parent_data.email).first()
     if existing_parent:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
-    
+
     # Create new parent
-    new_parent = Parent(
+    new_parent = User(
         email=parent_data.email,
         password_hash=hash_password(parent_data.password),
         full_name=parent_data.full_name
     )
-    
+
     db.add(new_parent)
     db.commit()
     db.refresh(new_parent)
-    
+
     return {
         "message": "Parent account created successfully",
         "parent_id": new_parent.id,
@@ -70,19 +70,19 @@ def register_parent(parent_data: ParentCreate, db: Session = Depends(get_db)):
 @router.post("/parent/login")
 def login_parent(login_data: ParentLogin, db: Session = Depends(get_db)):
     # Find parent by email
-    parent = db.query(Parent).filter(Parent.email == login_data.email).first()
-    
+    parent = db.query(User).filter(User.email == login_data.email).first()
+
     if not parent or not verify_password(login_data.password, parent.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
-    
+
     # Create access token
     access_token = create_access_token(
         data={"sub": str(parent.id), "type": "parent"}
     )
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -94,22 +94,23 @@ def login_parent(login_data: ParentLogin, db: Session = Depends(get_db)):
 
 @router.post("/child/login")
 def login_child(login_data: ChildLogin, db: Session = Depends(get_db)):
-    # Find child by username
-    child = db.query(Child).filter(Child.username == login_data.username).first()
-    
+    # Note: Your Child model uses first_name, not username
+    # You'll need to adjust this based on your actual login mechanism
+    child = db.query(Child).filter(Child.first_name == login_data.username).first()
+
     if not child:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or PIN"
         )
-    
+
     # Verify PIN
-    if not verify_password(login_data.pin, child.pin_hash):
+    if not child.pin_hash or not verify_password(login_data.pin, child.pin_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or PIN"
         )
-    
+
     # Create access token
     access_token = create_access_token(
         data={
@@ -118,12 +119,12 @@ def login_child(login_data: ChildLogin, db: Session = Depends(get_db)):
             "parent_id": str(child.parent_id)
         }
     )
-    
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "child_id": child.id,
-        "username": child.username,
-        "display_name": child.display_name,
+        "username": child.first_name,
+        "display_name": child.nickname or child.first_name,
         "grade_level": child.grade_level
     }
