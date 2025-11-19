@@ -192,3 +192,24 @@ class MessageFeedback(Base):
     feedback_text = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class EducationalContent(Base):
+    """Educational content documents"""
+    __tablename__ = "educational_content"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    subject = Column(String, nullable=False, index=True)  # math, science, history, etc.
+    grade_level = Column(String, nullable=False, index=True)  # elementary, middle, high
+    topic = Column(String, nullable=False, index=True)  # specific topic
+    content = Column(Text, nullable=False)  # Full markdown content
+    content_hash = Column(String, nullable=False)  # MD5 hash for change detection
+    file_path = Column(String, unique=True, nullable=False)  # Path to source file
+    word_count = Column(Integer, default=0)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<EducationalContent(id={self.id}, title='{self.title}', subject='{self.subject}')>"

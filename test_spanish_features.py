@@ -5,7 +5,7 @@ import asyncio
 import httpx
 from datetime import datetime
 
-BASE_URL = "http://localhost:8002"
+BASE_URL = "https://web-production-5e612.up.railway.app"
 API_PREFIX = "/api/v1"
 
 

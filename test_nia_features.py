@@ -8,7 +8,7 @@ import json
 from datetime import datetime, date
 
 # Your Railway API URL or local URL
-BASE_URL = "http://localhost:8002"
+BASE_URL = "https://web-production-5e612.up.railway.app"
 API_PREFIX = "/api/v1"  # Added API prefix
 
 

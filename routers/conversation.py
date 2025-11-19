@@ -14,8 +14,7 @@ from models import (
     Child,
     MessageFeedback
 )
-from services.conversation_service import ConversationService
-from services.rag_service import get_rag_service
+from services.rag_service import rag_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,372 +25,394 @@ logger = logging.getLogger(__name__)
 class SourceReference(BaseModel):
     """Detailed source reference with links"""
     title: str
-    type: str  # "web_search", "curated_content", "textbook"
-    query: Optional[str] = None
-    url: Optional[str] = None
-    citation_number: Optional[int] = None
-    verified: bool = True
+    type: str  # "curated_content", "general_knowledge"
+    subject: Optional[str] = None
+    grade_level: Optional[str] = None
+    relevance: Optional[str] = None
+
+
+class ConversationCreate(BaseModel):
+    """Create a new conversation"""
+    child_id: int
+    title: Optional[str] = "New Conversation"
+    folder: Optional[str] = None  # Auto-detected if not provided
 
 
 class MessageCreate(BaseModel):
-    conversation_id: Optional[int] = None
+    """Send a message in a conversation"""
     child_id: int
-    text: str
+    conversation_id: Optional[int] = None
+    text: str = Field(..., min_length=1, max_length=5000)
     current_depth: int = Field(default=1, ge=1, le=3)
-    continue_exploration: Optional[bool] = False
-    # Language is determined from child's profile
-
-
-class MessageResponse(BaseModel):
-    message_id: str
-    conversation_id: int
-    text: str
-    tutoring_depth_level: int
-    follow_up_offered: bool
-    follow_up_questions: List[str]
-    source_references: List[SourceReference]  # Enhanced with links
-    source_type: str
-    source_label: str
-    model_used: str
-    max_depth_reached: bool
-    language: str  # 'en' or 'es'
-    # Accessibility info
-    has_text_to_speech: bool
-    complexity_level: str  # "simplified", "standard", "advanced"
 
 
 class MessageFeedbackCreate(BaseModel):
+    """Submit feedback on a message"""
     message_id: int
     child_id: int
     is_helpful: bool
-    feedback_type: Optional[str] = None  # "too_complex", "too_simple", "inappropriate", "wrong_info"
+    feedback_type: Optional[str] = None
     feedback_text: Optional[str] = None
 
 
-class MessageFeedbackResponse(BaseModel):
-    success: bool
-    message: str
+class MessageResponse(BaseModel):
+    """AI response to a message"""
+    id: int
+    conversation_id: int
+    text: str
+    language: str
+    source_label: str
+    has_curated_content: bool
+    sources: List[SourceReference]
+    follow_up_questions: List[str]
+    tutoring_depth_level: int
+    max_depth_reached: bool
+    model_used: str
+    timestamp: datetime
 
 
 # ==================== Helper Functions ====================
 
-def get_language_strings(language: str) -> Dict[str, str]:
-    """Get UI strings in the appropriate language"""
-    strings = {
-        "en": {
-            "learn_more": "Would you like to learn more about this?",
-            "any_questions": "Do you have any questions about what I just explained?",
-            "more_detail": "Should I explain any part in more detail?",
-            "explore_further": "Would you like to explore this topic further?",
-            "see_examples": "Are there specific examples you'd like to see?",
-            "connections": "Should we look at how this connects to other topics?",
-            "practice": "Would you like to try a practice problem?",
-            "real_life": "Should we explore how this is used in real life?",
-            "new_topic": "Are you ready to move to a new topic?",
-        },
-        "es": {
-            "learn_more": "¿Te gustaría aprender más sobre esto?",
-            "any_questions": "¿Tienes alguna pregunta sobre lo que acabo de explicar?",
-            "more_detail": "¿Debería explicar alguna parte con más detalle?",
-            "explore_further": "¿Te gustaría explorar este tema más a fondo?",
-            "see_examples": "¿Hay ejemplos específicos que te gustaría ver?",
-            "connections": "¿Deberíamos ver cómo esto se conecta con otros temas?",
-            "practice": "¿Te gustaría intentar un problema de práctica?",
-            "real_life": "¿Deberíamos explorar cómo se usa esto en la vida real?",
-            "new_topic": "¿Estás listo para pasar a un nuevo tema?",
+def detect_folder_from_question(question: str, sources: List[Dict] = None) -> str:
+    """Detect conversation folder/category from question content"""
+
+    question_lower = question.lower()
+
+    # If we have sources from RAG, use the subject from the most relevant source
+    if sources and len(sources) > 0:
+        # Use subject from first (most relevant) source
+        subject = sources[0].get('subject', 'general')
+        folder_mapping = {
+            'math': 'Math',
+            'science': 'Science',
+            'history': 'History',
+            'english': 'English',
+            'geography': 'Geography'
         }
+        return folder_mapping.get(subject, 'General')
+
+    # Fallback to keyword detection
+    subject_keywords = {
+        'Math': ['math', 'arithmetic', 'algebra', 'geometry', 'fraction', 'multiply', 'divide',
+                 'add', 'subtract', 'equation', 'calculate', 'number', 'times', 'plus', 'minus'],
+        'Science': ['science', 'biology', 'chemistry', 'physics', 'photosynthesis', 'plant',
+                    'animal', 'water cycle', 'energy', 'cell', 'experiment', 'atom', 'molecule'],
+        'History': ['history', 'washington', 'revolution', 'american', 'civil war', 'president',
+                    'colony', 'ancient', 'historical', 'war', 'battle', 'independence'],
+        'English': ['english', 'grammar', 'writing', 'sentence', 'paragraph', 'noun', 'verb',
+                    'adjective', 'essay', 'story', 'book', 'read', 'literature'],
+        'Geography': ['geography', 'continent', 'ocean', 'state', 'country', 'map', 'capital',
+                      'city', 'mountain', 'river', 'climate', 'population'],
+        'Travel': ['travel', 'trip', 'vacation', 'visit', 'journey', 'destination', 'tourist',
+                   'flight', 'hotel', 'explore', 'adventure']
     }
-    return strings.get(language, strings["en"])
+
+    # Count keyword matches for each subject
+    matches = {}
+    for subject, keywords in subject_keywords.items():
+        count = sum(1 for keyword in keywords if keyword in question_lower)
+        if count > 0:
+            matches[subject] = count
+
+    # Return subject with most matches, or 'General' if no matches
+    if matches:
+        return max(matches.items(), key=lambda x: x[1])[0]
+
+    return 'General'
 
 
-def generate_follow_up_questions(
-    depth_level: int,
-    language: str = "en"
-) -> List[str]:
-    """Generate contextual follow-up questions in the appropriate language"""
-    strings = get_language_strings(language)
+def generate_conversation_title(question: str, max_length: int = 50) -> str:
+    """Generate a concise title from the first question"""
 
-    if depth_level == 1:
-        return [
-            strings["learn_more"],
-            strings["any_questions"],
-            strings["more_detail"]
-        ]
-    elif depth_level == 2:
-        return [
-            strings["explore_further"],
-            strings["see_examples"],
-            strings["connections"]
-        ]
-    else:
-        return [
-            strings["practice"],
-            strings["real_life"],
-            strings["new_topic"]
-        ]
+    # Clean up the question
+    title = question.strip()
+
+    # Remove question mark and extra spaces
+    title = title.replace('?', '').strip()
+
+    # Truncate if too long
+    if len(title) > max_length:
+        title = title[:max_length-3] + "..."
+
+    # Capitalize first letter
+    if title:
+        title = title[0].upper() + title[1:]
+
+    return title or "New Conversation"
 
 
-def format_answer_with_depth(
-    answer: str,
-    depth_level: int,
-    language: str = "en"
-) -> str:
-    """Format answer based on depth level and language"""
-
-    if language == "es":
-        prefixes = {
-            1: "📚 Déjame explicarte:\n\n",
-            2: "🔍 Exploremos más a fondo:\n\n",
-            3: "🎯 Aquí está la explicación avanzada:\n\n"
-        }
-    else:
-        prefixes = {
-            1: "📚 Let me explain:\n\n",
-            2: "🔍 Let's explore deeper:\n\n",
-            3: "🎯 Here's the advanced explanation:\n\n"
-        }
-
-    prefix = prefixes.get(depth_level, prefixes[1])
-
-    # Don't add prefix if answer already has emoji indicators
-    if not any(emoji in answer for emoji in ["📚", "🔍", "🎯", "🌐", "ℹ️"]):
-        return prefix + answer
-
-    return answer
-
-
-# ==================== Main Chat Endpoint with Full Features ====================
+# ==================== API Endpoints ====================
 
 @router.post("/message", response_model=MessageResponse)
 async def send_message(
-    message: MessageCreate,
+    message_data: MessageCreate,
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Enhanced chat endpoint with:
+    Send a message and get AI response with enhanced features:
+    - RAG with curated educational content
+    - Automatic folder categorization
     - Bilingual support (English/Spanish)
-    - Learning accommodations (autism, dyslexia, ADHD, etc.)
-    - Detailed source references
-    - Accessibility features
+    - Accessibility accommodations
+    - 3-level depth tutoring system
     """
+
     try:
-        # Get child with all preferences
+        # Get child profile
         result = await db.execute(
-            select(Child).where(Child.id == message.child_id)
+            select(Child).where(Child.id == message_data.child_id)
         )
         child = result.scalar_one_or_none()
 
-        if not child or not child.is_active:
+        if not child:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Child not found or inactive"
+                detail="Child not found"
             )
 
-        # Get child's preferences
-        language = getattr(child, 'preferred_language', 'en')
-        accommodations = getattr(child, 'learning_accommodations', None)
-        reading_level = getattr(child, 'reading_level', None) or child.grade_level
-        enable_tts = getattr(child, 'enable_text_to_speech', False)
+        # Build child profile for RAG
+        child_profile = {
+            'grade_level': child.grade_level,
+            'preferred_language': child.preferred_language or 'en',
+            'reading_level': child.reading_level or 'at grade level',
+            'learning_accommodations': child.learning_accommodations or []
+        }
 
         # Get or create conversation
-        conversation = None
-        if message.conversation_id:
-            result = await db.execute(
+        if message_data.conversation_id:
+            # Existing conversation
+            conv_result = await db.execute(
                 select(DBConversation).where(
-                    DBConversation.id == message.conversation_id,
-                    DBConversation.child_id == message.child_id
+                    DBConversation.id == message_data.conversation_id
                 )
             )
-            conversation = result.scalar_one_or_none()
+            conversation = conv_result.scalar_one_or_none()
 
+            if not conversation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Conversation not found"
+                )
+        else:
+            # New conversation - will auto-categorize after getting AI response
+            conversation = None
+
+        # Get conversation history if exists
+        conversation_history = []
+        if conversation:
+            history_result = await db.execute(
+                select(DBMessage)
+                .where(DBMessage.conversation_id == conversation.id)
+                .order_by(DBMessage.created_at.desc())
+                .limit(10)
+            )
+            messages = history_result.scalars().all()
+
+            # Format for RAG service (reverse to chronological order)
+            for msg in reversed(messages):
+                conversation_history.append({
+                    "role": msg.role,
+                    "content": msg.content
+                })
+
+        # Generate AI response using enhanced RAG
+        ai_response = await rag_service.generate_response(
+            db=db,
+            question=message_data.text,
+            child_profile=child_profile,
+            conversation_history=conversation_history,
+            current_depth=message_data.current_depth
+        )
+
+        # Auto-detect folder if creating new conversation
         if not conversation:
-            title = message.text[:50] + "..." if len(message.text) > 50 else message.text
+            folder = detect_folder_from_question(
+                message_data.text,
+                ai_response.get('sources', [])
+            )
+
+            title = generate_conversation_title(message_data.text)
+
+            # Create new conversation
             conversation = DBConversation(
-                child_id=message.child_id,
+                child_id=message_data.child_id,
                 title=title,
-                folder="General",
-                message_count=0,
-                total_depth_reached=1
+                folder=folder
             )
             db.add(conversation)
-            await db.flush()
+            await db.commit()
+            await db.refresh(conversation)
+
+            logger.info(f"Created new conversation: {title} in folder: {folder}")
 
         # Save user message
-        user_msg = DBMessage(
+        user_message = DBMessage(
             conversation_id=conversation.id,
             role="user",
-            content=message.text,
-            depth_level=message.current_depth
+            content=message_data.text
         )
-        db.add(user_msg)
-        await db.flush()
+        db.add(user_message)
 
-        # Get Nia's response with all accommodations
-        rag = get_rag_service()
-        result = rag.query(
-            question=message.text,
-            grade_level=child.grade_level,
-            depth_level=message.current_depth,
-            child_age=None,  # Calculate if needed
-            language=language,
-            accommodations=accommodations,
-            reading_level=reading_level
-        )
-
-        # Format answer
-        formatted_answer = format_answer_with_depth(
-            result["answer"],
-            message.current_depth,
-            language
-        )
-
-        # Build detailed source references with URLs
-        source_references = []
-        for idx, s in enumerate(result.get("sources", []), 1):
-            source_ref = SourceReference(
-                title=f"Web Search Result {idx}" if language == "en" else f"Resultado de Búsqueda {idx}",
-                type="web_search",
-                query=s.get("query", ""),
-                citation_number=idx,
-                verified=True
-            )
-            source_references.append(source_ref)
-
-        # Determine complexity level based on accommodations
-        if accommodations and "simplified_language" in accommodations:
-            complexity_level = "simplified"
-        elif message.current_depth >= 3:
-            complexity_level = "advanced"
-        else:
-            complexity_level = "standard"
-
-        # Source labeling
-        used_web = result.get("used_web_search", False)
-        if language == "es":
-            source_type = "búsqueda_web" if used_web else "conocimiento_general"
-            source_label = "🌐 De la web" if used_web else "ℹ️ De lo que sé"
-        else:
-            source_type = "web_search" if used_web else "general_knowledge"
-            source_label = "🌐 From the web" if used_web else "ℹ️ From what I know"
-
-        # Generate follow-up questions
-        max_depth_reached = message.current_depth >= 3
-        follow_up_offered = not max_depth_reached
-        follow_up_questions = generate_follow_up_questions(
-            message.current_depth,
-            language
-        ) if follow_up_offered else []
-
-        # Save AI message
-        ai_msg = DBMessage(
+        # Save AI response
+        assistant_message = DBMessage(
             conversation_id=conversation.id,
             role="assistant",
-            content=formatted_answer,
-            model_used=result["model_used"],
-            source_type=source_type,
-            sources=[s.dict() for s in source_references],
-            depth_level=message.current_depth
+            content=ai_response['text'],
+            tutoring_depth_level=message_data.current_depth,
+            has_curated_content=ai_response.get('has_curated_content', False),
+            model_used=ai_response.get('model_used', 'unknown')
         )
-        db.add(ai_msg)
-
-        # Update metadata
-        conversation.message_count += 2
-        conversation.updated_at = datetime.utcnow()
-        if message.current_depth > conversation.total_depth_reached:
-            conversation.total_depth_reached = message.current_depth
-
-        child.last_active = datetime.utcnow()
+        db.add(assistant_message)
 
         await db.commit()
-        await db.refresh(ai_msg)
+        await db.refresh(assistant_message)
 
-        logger.info(
-            f"✅ Message processed for child {message.child_id}, "
-            f"lang={language}, accommodations={accommodations}"
-        )
+        # Format sources for response
+        formatted_sources = []
+        for source in ai_response.get('sources', []):
+            formatted_sources.append(SourceReference(
+                title=source.get('title', 'Unknown'),
+                type='curated_content' if source.get('subject') else 'general_knowledge',
+                subject=source.get('subject'),
+                grade_level=source.get('grade_level'),
+                relevance=source.get('relevance', 'medium')
+            ))
 
+        # Generate follow-up questions based on depth
+        follow_up_questions = []
+        max_depth_reached = message_data.current_depth >= 3
+
+        if not max_depth_reached:
+            if message_data.current_depth == 1:
+                follow_up_questions = ["Would you like to learn more about this?"]
+            elif message_data.current_depth == 2:
+                follow_up_questions = ["Would you like to explore this topic further?"]
+
+        # Return response
         return MessageResponse(
-            message_id=str(ai_msg.id),
+            id=assistant_message.id,
             conversation_id=conversation.id,
-            text=formatted_answer,
-            tutoring_depth_level=message.current_depth,
-            follow_up_offered=follow_up_offered,
+            text=ai_response['text'],
+            language=child_profile['preferred_language'],
+            source_label=ai_response.get('source_label', 'ℹ️ From what I know'),
+            has_curated_content=ai_response.get('has_curated_content', False),
+            sources=formatted_sources,
             follow_up_questions=follow_up_questions,
-            source_references=source_references,
-            source_type=source_type,
-            source_label=source_label,
-            model_used=result["model_used"],
+            tutoring_depth_level=message_data.current_depth,
             max_depth_reached=max_depth_reached,
-            language=language,
-            has_text_to_speech=enable_tts,
-            complexity_level=complexity_level
+            model_used=ai_response.get('model_used', 'unknown'),
+            timestamp=assistant_message.created_at
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        await db.rollback()
         logger.error(f"Error processing message: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred processing your message"
+            detail=f"Error processing message: {str(e)}"
         )
 
 
-# ==================== Feedback Endpoint ====================
+@router.get("/conversations/{child_id}")
+async def get_conversations(
+    child_id: int,
+    folder: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all conversations for a child, optionally filtered by folder"""
 
-@router.post("/feedback", response_model=MessageFeedbackResponse)
+    query = select(DBConversation).where(DBConversation.child_id == child_id)
+
+    if folder:
+        query = query.where(DBConversation.folder == folder)
+
+    query = query.order_by(DBConversation.updated_at.desc())
+
+    result = await db.execute(query)
+    conversations = result.scalars().all()
+
+    return {
+        "conversations": [
+            {
+                "id": conv.id,
+                "title": conv.title,
+                "folder": conv.folder,
+                "created_at": conv.created_at,
+                "updated_at": conv.updated_at
+            }
+            for conv in conversations
+        ]
+    }
+
+
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(
+    conversation_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all messages in a conversation"""
+
+    result = await db.execute(
+        select(DBMessage)
+        .where(DBMessage.conversation_id == conversation_id)
+        .order_by(DBMessage.created_at.asc())
+    )
+    messages = result.scalars().all()
+
+    return {
+        "messages": [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at,
+                "tutoring_depth_level": msg.tutoring_depth_level,
+                "has_curated_content": msg.has_curated_content
+            }
+            for msg in messages
+        ]
+    }
+
+
+@router.post("/feedback")
 async def submit_feedback(
     feedback: MessageFeedbackCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Submit feedback on a message (helpful/not helpful button)
-    This helps improve Nia's responses over time
-    """
-    try:
-        # Verify message exists
-        result = await db.execute(
-            select(DBMessage).where(DBMessage.id == feedback.message_id)
-        )
-        message = result.scalar_one_or_none()
+    """Submit feedback on an AI response"""
 
-        if not message:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Message not found"
-            )
+    # Create feedback record
+    db_feedback = MessageFeedback(
+        message_id=feedback.message_id,
+        child_id=feedback.child_id,
+        is_helpful=feedback.is_helpful,
+        feedback_type=feedback.feedback_type,
+        feedback_text=feedback.feedback_text
+    )
 
-        # Create feedback record
-        feedback_record = MessageFeedback(
-            message_id=feedback.message_id,
-            child_id=feedback.child_id,
-            is_helpful=feedback.is_helpful,
-            feedback_type=feedback.feedback_type,
-            feedback_text=feedback.feedback_text
-        )
+    db.add(db_feedback)
+    await db.commit()
 
-        db.add(feedback_record)
-        await db.commit()
+    if feedback.is_helpful:
+        return {"message": "Thank you for your feedback! This helps Nia learn and improve."}
+    else:
+        return {"message": "Thank you for letting us know. We'll work on improving this."}
 
-        logger.info(
-            f"📊 Feedback received: message={feedback.message_id}, "
-            f"helpful={feedback.is_helpful}, type={feedback.feedback_type}"
-        )
 
-        return MessageFeedbackResponse(
-            success=True,
-            message="Thank you for your feedback! This helps Nia learn and improve."
-                   if feedback.is_helpful
-                   else "Thank you for letting us know. We'll work on improving this."
-        )
+@router.get("/folders/{child_id}")
+async def get_folders(
+    child_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all unique folders for a child's conversations"""
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Error submitting feedback: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error submitting feedback"
-        )
+    result = await db.execute(
+        select(DBConversation.folder)
+        .where(DBConversation.child_id == child_id)
+        .distinct()
+    )
+
+    folders = [row[0] for row in result.all() if row[0]]
+
+    return {"folders": sorted(folders)}
