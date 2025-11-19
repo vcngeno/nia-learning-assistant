@@ -43,6 +43,11 @@ class Child(Base):
     date_of_birth = Column(DateTime(timezone=True), nullable=False)
     grade_level = Column(String, nullable=False)
 
+    # Language and learning preferences
+    preferred_language = Column(String, default="en", nullable=False)  # 'en' or 'es'
+    reading_level = Column(String, default="at grade level", nullable=True)
+    learning_accommodations = Column(JSON, default=list, nullable=True)  # ['autism_support', 'dyslexia_support', etc.]
+
     pin_hash = Column(String, nullable=True)
 
     avatar_url = Column(String, nullable=True)
