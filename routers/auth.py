@@ -1,21 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from passlib.context import CryptContext
 from database import get_db
-from models import User, Child  # Changed from Parent to User
-from schemas import ParentCreate, ParentLogin, ChildLogin, Token
+from models import User, Child
+from schemas import ParentCreate, ParentLogin, ChildLogin
 from datetime import datetime, timedelta
 from typing import Optional
 import jwt
 import os
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter()
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT settings
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this")
+# JWT settings - use same key as auth.py
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
@@ -40,9 +41,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 @router.post("/parent/register", status_code=status.HTTP_201_CREATED)
-def register_parent(parent_data: ParentCreate, db: Session = Depends(get_db)):
-    # Check if email already exists
-    existing_parent = db.query(User).filter(User.email == parent_data.email).first()
+async def register_parent(parent_data: ParentCreate, db: AsyncSession = Depends(get_db)):
+    # Check if email already exists (async query)
+    result = await db.execute(
+        select(User).where(User.email == parent_data.email)
+    )
+    existing_parent = result.scalar_one_or_none()
+
     if existing_parent:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -57,8 +62,8 @@ def register_parent(parent_data: ParentCreate, db: Session = Depends(get_db)):
     )
 
     db.add(new_parent)
-    db.commit()
-    db.refresh(new_parent)
+    await db.commit()
+    await db.refresh(new_parent)
 
     return {
         "message": "Parent account created successfully",
@@ -68,9 +73,12 @@ def register_parent(parent_data: ParentCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/parent/login")
-def login_parent(login_data: ParentLogin, db: Session = Depends(get_db)):
-    # Find parent by email
-    parent = db.query(User).filter(User.email == login_data.email).first()
+async def login_parent(login_data: ParentLogin, db: AsyncSession = Depends(get_db)):
+    # Find parent by email (async query)
+    result = await db.execute(
+        select(User).where(User.email == login_data.email)
+    )
+    parent = result.scalar_one_or_none()
 
     if not parent or not verify_password(login_data.password, parent.password_hash):
         raise HTTPException(
@@ -78,9 +86,9 @@ def login_parent(login_data: ParentLogin, db: Session = Depends(get_db)):
             detail="Invalid email or password"
         )
 
-    # Create access token
+    # Create access token with EMAIL in "sub" (matches auth.py expectations)
     access_token = create_access_token(
-        data={"sub": str(parent.id), "type": "parent"}
+        data={"sub": parent.email, "type": "parent", "user_id": parent.id}
     )
 
     return {
@@ -93,10 +101,12 @@ def login_parent(login_data: ParentLogin, db: Session = Depends(get_db)):
 
 
 @router.post("/child/login")
-def login_child(login_data: ChildLogin, db: Session = Depends(get_db)):
-    # Note: Your Child model uses first_name, not username
-    # You'll need to adjust this based on your actual login mechanism
-    child = db.query(Child).filter(Child.first_name == login_data.username).first()
+async def login_child(login_data: ChildLogin, db: AsyncSession = Depends(get_db)):
+    # Find child by username (using first_name) - async query
+    result = await db.execute(
+        select(Child).where(Child.first_name == login_data.username)
+    )
+    child = result.scalar_one_or_none()
 
     if not child:
         raise HTTPException(

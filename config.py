@@ -1,42 +1,33 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from functools import lru_cache
+from dotenv import load_dotenv
+import os
+
+# Load .env file
+load_dotenv()
 
 class Settings(BaseSettings):
-    # Application
-    APP_NAME: str = "Nia"
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
-    
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://devuser:devpass@postgres:5432/nia_db"
-    
-    @property
-    def async_database_url(self) -> str:
-        """Ensure DATABASE_URL uses asyncpg driver"""
-        url = self.DATABASE_URL
-        if url.startswith("postgresql://"):
-            return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
-    
+    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5433/nia_db")
+    async_database_url: str = os.getenv("ASYNC_DATABASE_URL", "postgresql+asyncpg://postgres:password@localhost:5433/nia_db")
+
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production"
-    JWT_SECRET_KEY: str = "your-jwt-secret-change-in-production"
-    JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 1440
-    
-    # Anthropic API
-    ANTHROPIC_API_KEY: str = ""
-    
-    # US-First Settings
-    DEFAULT_TIMEZONE: str = "America/New_York"
-    DEFAULT_LOCALE: str = "en-US"
-    
-    # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
-    
+    secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-change-this")
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-jwt-secret-key")
+
+    # API Keys
+    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+
+    # Environment
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
+
     class Config:
         env_file = ".env"
-        case_sensitive = True
-        extra = "allow"
+        case_sensitive = False
 
-settings = Settings()
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings()
