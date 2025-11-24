@@ -132,6 +132,8 @@ class Message(Base):
     sources = Column(JSON, nullable=True)
 
     depth_level = Column(Integer, default=1, nullable=False)
+    tutoring_depth_level = Column(Integer, default=1, nullable=False)  # Alias for depth_level
+    has_curated_content = Column(Boolean, default=False, nullable=False)
 
     flagged = Column(Boolean, default=False, nullable=False)
     flag_reason = Column(String, nullable=True)

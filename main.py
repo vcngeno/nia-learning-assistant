@@ -38,6 +38,13 @@ async def lifespan(app: FastAPI):
             await conn.execute(text(
                 "ALTER TABLE children ADD COLUMN IF NOT EXISTS learning_accommodations TEXT DEFAULT '[]'"
             ))
+            # Add message table columns
+            await conn.execute(text(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS tutoring_depth_level INTEGER DEFAULT 1"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE messages ADD COLUMN IF NOT EXISTS has_curated_content BOOLEAN DEFAULT FALSE"
+            ))
             logger.info("✅ Migrations applied successfully")
     except Exception as e:
         logger.warning(f"Migration note: {e}")
