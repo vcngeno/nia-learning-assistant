@@ -1,209 +1,285 @@
-import anthropic
-import os
+"""
+Enhanced RAG Service with Educational Content Integration
+"""
 import logging
-import httpx
-from typing import Dict, Optional, List
+from typing import List, Dict, Optional
+from anthropic import Anthropic
+from sqlalchemy.ext.asyncio import AsyncSession
+from config import settings
+from services.content_manager import content_manager
 
 logger = logging.getLogger(__name__)
 
 
 class RAGService:
+    """Enhanced RAG service with educational content"""
+
     def __init__(self):
-        self.api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found")
+        self.client = Anthropic(api_key=settings.anthropic_api_key)
 
-        http_client = httpx.Client(
-            timeout=60.0,
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
-        )
-        self.client = anthropic.Anthropic(api_key=self.api_key, http_client=http_client)
-        logger.info("✅ RAG Service initialized")
-
-    def _build_system_prompt(
+    async def search_relevant_content(
         self,
-        grade_level: str,
-        language: str = "en",
-        accommodations: Optional[List[str]] = None,
-        reading_level: Optional[str] = None
-    ) -> str:
-        """Build a customized system prompt based on child's needs"""
+        db: AsyncSession,
+        query: str,
+        child_grade_level: str = None,
+        limit: int = 3
+    ) -> List[Dict]:
+        """Search for relevant educational content"""
 
-        # Base prompt
-        if language == "es":
-            base = f"Eres Nia, una asistente de aprendizaje amigable para estudiantes de {grade_level}."
-        else:
-            base = f"You are Nia, a friendly AI learning assistant for {grade_level} students."
-
-        # Add accommodation-specific instructions
-        accommodation_prompts = {
-            "autism_support": {
-                "en": "\n- Use clear, literal language without idioms or metaphors\n- Provide structured, predictable responses\n- Break information into small, clear steps\n- Avoid overwhelming visual descriptions",
-                "es": "\n- Usa lenguaje claro y literal sin modismos o metáforas\n- Proporciona respuestas estructuradas y predecibles\n- Divide la información en pasos pequeños y claros\n- Evita descripciones visuales abrumadoras"
-            },
-            "dyslexia_support": {
-                "en": "\n- Use simple sentence structures\n- Avoid long paragraphs\n- Use bullet points when helpful\n- Spell out numbers and dates clearly",
-                "es": "\n- Usa estructuras de oraciones simples\n- Evita párrafos largos\n- Usa viñetas cuando sea útil\n- Deletrea números y fechas claramente"
-            },
-            "adhd_support": {
-                "en": "\n- Keep responses concise and focused\n- Use engaging, varied language\n- Break content into manageable chunks\n- Provide clear transitions between topics",
-                "es": "\n- Mantén las respuestas concisas y enfocadas\n- Usa lenguaje variado y atractivo\n- Divide el contenido en partes manejables\n- Proporciona transiciones claras entre temas"
-            },
-            "visual_learner": {
-                "en": "\n- Describe concepts visually when possible\n- Use spatial analogies\n- Suggest mental imagery techniques",
-                "es": "\n- Describe conceptos visualmente cuando sea posible\n- Usa analogías espaciales\n- Sugiere técnicas de imágenes mentales"
-            },
-            "simplified_language": {
-                "en": "\n- Use simple, everyday vocabulary\n- Avoid technical jargon unless explaining it\n- Use short sentences\n- Define unfamiliar words",
-                "es": "\n- Usa vocabulario simple y cotidiano\n- Evita jerga técnica a menos que la expliques\n- Usa oraciones cortas\n- Define palabras desconocidas"
-            }
+        # Extract subject keywords from query
+        subject_keywords = {
+            'math': ['math', 'arithmetic', 'algebra', 'geometry', 'fraction', 'multiply', 'divide', 'add', 'subtract', 'equation'],
+            'science': ['science', 'biology', 'chemistry', 'physics', 'photosynthesis', 'plant', 'animal', 'water cycle', 'energy'],
+            'history': ['history', 'washington', 'revolution', 'american', 'civil war', 'president', 'colony'],
+            'english': ['english', 'grammar', 'writing', 'sentence', 'paragraph', 'noun', 'verb', 'adjective'],
+            'geography': ['geography', 'continent', 'ocean', 'state', 'country', 'map', 'capital']
         }
 
-        # Add accommodations to prompt
-        if accommodations:
-            if language == "es":
-                base += "\n\nAdaptaciones especiales:"
-            else:
-                base += "\n\nSpecial accommodations:"
+        # Determine subject from query
+        query_lower = query.lower()
+        detected_subject = None
 
-            for acc in accommodations:
-                if acc in accommodation_prompts:
-                    base += accommodation_prompts[acc].get(language, accommodation_prompts[acc]["en"])
+        for subject, keywords in subject_keywords.items():
+            if any(keyword in query_lower for keyword in keywords):
+                detected_subject = subject
+                break
 
-        # Add reading level adjustment
-        if reading_level and reading_level != grade_level:
-            if language == "es":
-                base += f"\n\nNivel de lectura: {reading_level} (ajusta el vocabulario apropiadamente)"
-            else:
-                base += f"\n\nReading level: {reading_level} (adjust vocabulary accordingly)"
+        # Map grade levels
+        grade_mapping = {
+            'kindergarten': 'elementary',
+            '1st grade': 'elementary',
+            '2nd grade': 'elementary',
+            '3rd grade': 'elementary',
+            '4th grade': 'elementary',
+            '5th grade': 'elementary',
+            '6th grade': 'middle',
+            '7th grade': 'middle',
+            '8th grade': 'middle',
+            '9th grade': 'high',
+            '10th grade': 'high',
+            '11th grade': 'high',
+            '12th grade': 'high',
+        }
 
-        # Add source citation instruction
-        if language == "es":
-            base += "\n\n- Usa búsqueda web para información actual\n- Cita tus fuentes claramente\n- Sé alentador y paciente 🌟"
-        else:
-            base += "\n\n- Use web search for current information\n- Cite your sources clearly\n- Be encouraging and patient 🌟"
+        grade_level_category = grade_mapping.get(child_grade_level, 'elementary')
 
-        return base
+        # Search content
+        results = await content_manager.search_content(
+            db=db,
+            query=query,
+            subject=detected_subject,
+            grade_level=grade_level_category,
+            limit=limit
+        )
 
-    def query(
+        # Format results
+        formatted_results = []
+        for content in results:
+            formatted_results.append({
+                'id': content.id,
+                'title': content.title,
+                'subject': content.subject,
+                'grade_level': content.grade_level,
+                'topic': content.topic,
+                'content': content.content,
+                'relevance': 'high' if detected_subject == content.subject else 'medium'
+            })
+
+        return formatted_results
+
+    def build_context_from_content(
         self,
+        search_results: List[Dict],
+        max_tokens: int = 3000
+    ) -> str:
+        """Build context string from search results"""
+
+        if not search_results:
+            return ""
+
+        context_parts = ["Here is relevant educational content from our curriculum:\n"]
+        current_tokens = 0
+
+        for i, result in enumerate(search_results, 1):
+            content_preview = result['content'][:1500]  # Limit each piece
+
+            section = f"\n--- Source {i}: {result['title']} ({result['subject']} - {result['grade_level']}) ---\n{content_preview}\n"
+
+            # Rough token estimation (4 chars ≈ 1 token)
+            estimated_tokens = len(section) // 4
+
+            if current_tokens + estimated_tokens > max_tokens:
+                break
+
+            context_parts.append(section)
+            current_tokens += estimated_tokens
+
+        return "".join(context_parts)
+
+    async def generate_response(
+        self,
+        db: AsyncSession,
         question: str,
-        grade_level: str = "5th grade",
-        depth_level: int = 1,
-        child_age: Optional[int] = None,
-        language: str = "en",
-        accommodations: Optional[List[str]] = None,
-        reading_level: Optional[str] = None
+        child_profile: Dict,
+        conversation_history: List[Dict] = None,
+        current_depth: int = 1
     ) -> Dict:
-        """
-        Query the RAG system with full accessibility support
+        """Generate response using RAG with educational content"""
 
-        Args:
-            question: The child's question
-            grade_level: Child's grade level
-            depth_level: Current depth in conversation (1-3)
-            child_age: Child's age for age-appropriate responses
-            language: 'en' for English, 'es' for Spanish
-            accommodations: List of learning accommodations to apply
-            reading_level: Reading level if different from grade level
-        """
+        # Search for relevant content
+        search_results = await self.search_relevant_content(
+            db=db,
+            query=question,
+            child_grade_level=child_profile.get('grade_level'),
+            limit=3
+        )
+
+        # Build context from search results
+        context = self.build_context_from_content(search_results)
+
+        # Determine if we have curated content
+        has_curated_content = len(search_results) > 0
+
+        # Build system prompt
+        system_prompt = self._build_system_prompt(
+            child_profile=child_profile,
+            has_curated_content=has_curated_content,
+            current_depth=current_depth
+        )
+
+        # Build user message
+        if context:
+            user_message = f"{context}\n\nStudent's Question: {question}"
+        else:
+            user_message = f"Student's Question: {question}"
+
+        # Prepare messages
+        messages = []
+
+        # Add conversation history if exists
+        if conversation_history:
+            for msg in conversation_history[-4:]:  # Last 4 messages for context
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        # Add current question
+        messages.append({
+            "role": "user",
+            "content": user_message
+        })
+
         try:
-            system_prompt = self._build_system_prompt(
-                grade_level=grade_level,
-                language=language,
-                accommodations=accommodations,
-                reading_level=reading_level
-            )
-
-            # Add language instruction to question if Spanish
-            if language == "es":
-                question_with_lang = f"[Responde en español] {question}"
-            else:
-                question_with_lang = question
-
+            # Call Claude API
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=1500,
+                max_tokens=2000,
                 temperature=0.7,
                 system=system_prompt,
-                messages=[{"role": "user", "content": question_with_lang}],
-                tools=[{"type": "web_search_20250305", "name": "web_search"}]
+                messages=messages
             )
 
-            answer = ""
-            sources = []
-            citations = []
+            answer_text = response.content[0].text
 
-            # Process response blocks
-            for block in response.content:
-                if block.type == "text":
-                    answer += block.text
-                elif block.type == "tool_use" and block.name == "web_search":
-                    search_query = block.input.get("query", "")
-                    sources.append({
-                        "type": "web_search",
-                        "query": search_query,
-                        "verified": True
-                    })
-
-            # Check if web search was used
-            used_web = any(s["type"] == "web_search" for s in sources)
-
-            # Add source indicator if not already present
-            if language == "es":
-                web_indicator = "🌐 Información de la web:\n\n"
-                knowledge_indicator = "ℹ️ De lo que sé:\n\n"
+            # Determine source label
+            if has_curated_content:
+                source_label = "📚 From our curriculum"
             else:
-                web_indicator = "🌐 From the web:\n\n"
-                knowledge_indicator = "ℹ️ From what I know:\n\n"
+                source_label = "ℹ️ From what I know"
 
-            if used_web and "🌐" not in answer:
-                answer = web_indicator + answer
-            elif not used_web and "ℹ️" not in answer:
-                answer = knowledge_indicator + answer
-
-            # Extract citations from answer (look for [1], [2], etc.)
-            import re
-            citation_pattern = r'\[(\d+)\]'
-            citation_numbers = re.findall(citation_pattern, answer)
+            # Format response
+            formatted_answer = f"{source_label}:\n\n{answer_text}"
 
             return {
-                "answer": answer,
-                "sources": sources,
-                "citations": citation_numbers,
-                "model_used": "claude-sonnet-4",
-                "used_web_search": used_web,
-                "language": language
+                'text': formatted_answer,
+                'source_label': source_label,
+                'has_curated_content': has_curated_content,
+                'sources': search_results,
+                'model_used': 'claude-sonnet-4-20250514',
+                'tokens_used': response.usage.input_tokens + response.usage.output_tokens
             }
 
         except Exception as e:
-            logger.error(f"RAG query error: {e}", exc_info=True)
+            logger.error(f"Error generating response: {e}")
+            raise
 
-            # Return error message in appropriate language
-            if language == "es":
-                error_msg = "Lo siento, tuve un problema procesando tu pregunta. ¿Podrías intentar preguntar de otra manera?"
-            else:
-                error_msg = "I'm sorry, I had trouble processing your question. Could you try asking in a different way?"
+    def _build_system_prompt(
+        self,
+        child_profile: Dict,
+        has_curated_content: bool,
+        current_depth: int
+    ) -> str:
+        """Build system prompt based on child profile and context"""
 
-            return {
-                "answer": error_msg,
-                "sources": [],
-                "citations": [],
-                "model_used": "error",
-                "used_web_search": False,
-                "language": language,
-                "error": str(e)
-            }
+        base_prompt = f"""You are Nia, a friendly and encouraging AI tutor for K-12 students in the United States.
+
+Student Profile:
+- Grade Level: {child_profile.get('grade_level', 'elementary')}
+- Preferred Language: {child_profile.get('preferred_language', 'en')}
+- Reading Level: {child_profile.get('reading_level', 'at grade level')}
+
+Teaching Approach:
+- Be warm, encouraging, and patient
+- Use age-appropriate language for {child_profile.get('grade_level', 'elementary')} level
+- Explain concepts clearly with examples
+- Use US curriculum standards (Common Core)
+- Include emojis to make learning fun (but not too many!)
+
+"""
+
+        # Add content source instruction
+        if has_curated_content:
+            base_prompt += """IMPORTANT: You have been provided with curated educational content from our curriculum. Use this content as your PRIMARY source. Explain the concepts from this material in your own words, adapted to the student's level.
+
+"""
+
+        # Add language instruction
+        if child_profile.get('preferred_language') == 'es':
+            base_prompt += """CRITICAL: Respond in SPANISH. The student prefers Spanish, so your entire response must be in Spanish.
+
+"""
+
+        # Add depth-based instructions
+        if current_depth == 1:
+            base_prompt += """This is an introductory explanation. Keep it clear and simple, covering the main concepts.
+
+"""
+        elif current_depth == 2:
+            base_prompt += """This is a deeper dive. Provide more details, examples, and explanations than before.
+
+"""
+        elif current_depth == 3:
+            base_prompt += """This is the deepest level. Provide comprehensive information with advanced details, multiple examples, and connections to related concepts.
+
+"""
+
+        # Add accommodations if any
+        accommodations = child_profile.get('learning_accommodations', [])
+        if accommodations:
+            base_prompt += f"\nLearning Accommodations: {', '.join(accommodations)}\n"
+
+            if 'autism_support' in accommodations:
+                base_prompt += "- Use literal language, avoid metaphors\n- Provide clear, structured explanations\n- List steps explicitly\n"
+
+            if 'dyslexia_support' in accommodations:
+                base_prompt += "- Use simple sentences\n- Break information into bullet points\n- Use clear formatting\n"
+
+            if 'adhd_support' in accommodations:
+                base_prompt += "- Keep responses concise and focused\n- Use engaging language\n- Highlight key points\n"
+
+            if 'visual_learner' in accommodations:
+                base_prompt += "- Use visual descriptions\n- Describe spatial relationships\n- Paint mental pictures\n"
+
+        base_prompt += """\nResponse Format:
+- Start with the explanation
+- Use examples relevant to the student's life
+- End with follow-up questions to check understanding (unless at max depth)
+- Be encouraging and supportive!
+"""
+
+        return base_prompt
 
 
-_rag_service = None
-
-
-def get_rag_service() -> RAGService:
-    global _rag_service
-    if _rag_service is None:
-        _rag_service = RAGService()
-    return _rag_service
-
-# Export as rag_service for easier imports
+# Singleton instance
 rag_service = RAGService()
