@@ -196,7 +196,9 @@ class ContentManager:
         if topic:
             conditions.append(EducationalContent.topic.ilike(f"%{topic}%"))
 
-        if query:
+        # Only use query filter if no subject/grade filters
+        # Otherwise the subject+grade is enough to find relevant content
+        if query and not (subject or grade_level):
             conditions.append(
                 EducationalContent.content.ilike(f"%{query}%")
             )
@@ -205,6 +207,10 @@ class ContentManager:
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
+
+        # If we have subject but no results with filters, try subject only
+        if not conditions and subject:
+            stmt = stmt.where(EducationalContent.subject == subject)
 
         stmt = stmt.limit(limit)
 
