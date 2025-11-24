@@ -49,6 +49,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Migration note: {e}")
 
+    # Ingest educational content
+    try:
+        from services.content_manager import content_manager
+        from database import async_session
+        async with async_session() as db:
+            stats = await content_manager.ingest_all_content(db, force_update=False)
+            logger.info(f"📚 Content ingestion: {stats['added']} added, {stats['updated']} updated, {stats['skipped']} skipped")
+    except Exception as e:
+        logger.warning(f"Content ingestion note: {e}")
+
     logger.info("✅ Nia API started successfully!")
 
     yield
