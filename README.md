@@ -14,7 +14,7 @@ Unlike traditional AI tutors, Nia:
 - **📚 Uses Curated Content** - Prioritizes verified curriculum materials over general knowledge
 - **🔍 Shows Its Sources** - "From our curriculum" vs "From what I know" transparency
 - **📁 Auto-Organizes** - Conversations automatically sorted by subject (Math, Science, etc.)
-- **🌈 Inclusive by Design** - Built-in accommodations for autism, dyslexia, ADHD, and more
+- **🧩 Inclusive by Design** - Built-in accommodations for autism, dyslexia, ADHD, and more
 - **🔒 COPPA Compliant** - Parent-controlled accounts with comprehensive safety features
 
 ## ✨ Key Features
