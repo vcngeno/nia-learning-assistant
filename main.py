@@ -91,3 +91,5 @@ async def health_check():
         "service": "Nia Learning Assistant API",
         "version": "1.0.0"
     }
+
+# Version: 1.0.1 - Added migration support
