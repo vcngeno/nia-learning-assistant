@@ -63,6 +63,9 @@ class RAGService:
 
         grade_level_category = grade_mapping.get(child_grade_level, 'elementary')
 
+        # Log search parameters
+        logger.info(f"RAG Search - Query: '{query}', Subject: {detected_subject}, Grade: {grade_level_category}")
+
         # Search content
         results = await content_manager.search_content(
             db=db,
