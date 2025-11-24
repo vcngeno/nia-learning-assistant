@@ -1,4 +1,5 @@
-from .conversation_service import ConversationService
-from .rag_service import get_rag_service
+"""Services package"""
+from .rag_service import rag_service
+from .content_manager import content_manager
 
-__all__ = ["ConversationService", "get_rag_service"]
+__all__ = ['rag_service', 'content_manager']
