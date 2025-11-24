@@ -1,8 +1,7 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 import logging
-import os
 
 from database import engine, Base
 from routers import conversation, auth, children, dashboard
@@ -10,25 +9,45 @@ from routers import conversation, auth, children, dashboard
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='[NIA] %(asctime)s - %(levelname)s - %(message)s'
+    format='[%(name)s] %(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("NIA")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     logger.info("🌟 Nia is starting up...")
-    
+
     # Create database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     logger.info("✅ Database tables created successfully")
+
+    # Run migrations for child table
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(
+                "ALTER TABLE children ADD COLUMN IF NOT EXISTS preferred_language VARCHAR DEFAULT 'en' NOT NULL"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE children ADD COLUMN IF NOT EXISTS reading_level VARCHAR DEFAULT 'at grade level'"
+            ))
+            await conn.execute(text(
+                "ALTER TABLE children ADD COLUMN IF NOT EXISTS learning_accommodations TEXT DEFAULT '[]'"
+            ))
+            logger.info("✅ Migrations applied successfully")
+    except Exception as e:
+        logger.warning(f"Migration note: {e}")
+
     logger.info("✅ Nia API started successfully!")
-    
+
     yield
-    
+
     logger.info("👋 Nia is shutting down...")
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -49,27 +68,26 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(children.router, prefix="/api/v1/children", tags=["Child Profiles"])
-app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Parent Dashboard"])
-app.include_router(conversation.router, prefix="/api/v1/conversation", tags=["Conversations"])
+app.include_router(children.router, prefix="/api/v1/children", tags=["Children"])
+app.include_router(conversation.router, prefix="/api/v1/conversation", tags=["Conversation"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+
 
 @app.get("/")
 async def root():
+    """Health check endpoint"""
     return {
         "message": "Welcome to Nia API",
         "version": "1.0.0",
         "status": "operational"
     }
 
+
 @app.get("/health")
 async def health_check():
+    """Detailed health check"""
     return {
         "status": "healthy",
-        "database": "connected",
-        "ai_service": "operational"
+        "service": "Nia Learning Assistant API",
+        "version": "1.0.0"
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
