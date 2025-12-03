@@ -1,0 +1,322 @@
+// API Configuration
+const API_BASE_URL = 'https://web-production-5e612.up.railway.app/api/v1';
+
+// State
+let currentUser = null;
+let currentChild = null;
+let currentConversationId = null;
+let authToken = null;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    const savedToken = localStorage.getItem('authToken');
+    const savedUser = localStorage.getItem('currentUser');
+
+    if (savedToken && savedUser) {
+        authToken = savedToken;
+        currentUser = JSON.parse(savedUser);
+        showChildSection();
+    }
+});
+
+// Auth Functions
+async function login() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const errorDiv = document.getElementById('login-error');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/parent/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            authToken = data.access_token;
+            currentUser = { email, name: data.name || email };
+            localStorage.setItem('authToken', authToken);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            showChildSection();
+        } else {
+            errorDiv.textContent = data.detail || 'Login failed';
+        }
+    } catch (error) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+    }
+}
+
+async function register() {
+    const name = document.getElementById('register-name').value;
+    const email = document.getElementById('register-email').value;
+    const password = document.getElementById('register-password').value;
+    const errorDiv = document.getElementById('register-error');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/parent/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ full_name: name, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            document.getElementById('login-email').value = email;
+            document.getElementById('login-password').value = password;
+            showTab('login');
+            setTimeout(() => login(), 500);
+        } else {
+            errorDiv.textContent = data.detail || 'Registration failed';
+        }
+    } catch (error) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+    }
+}
+
+function logout() {
+    localStorage.clear();
+    location.reload();
+}
+
+function showTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.auth-form').forEach(form => form.style.display = 'none');
+
+    if (tab === 'login') {
+        document.querySelector('.tab-btn:first-child').classList.add('active');
+        document.getElementById('login-form').style.display = 'flex';
+    } else {
+        document.querySelector('.tab-btn:last-child').classList.add('active');
+        document.getElementById('register-form').style.display = 'flex';
+    }
+}
+
+async function showChildSection() {
+    document.getElementById('auth-section').style.display = 'none';
+    document.getElementById('child-section').style.display = 'flex';
+    document.getElementById('user-info').style.display = 'flex';
+    document.getElementById('user-name').textContent = currentUser.name || currentUser.email;
+    await loadChildren();
+}
+
+async function loadChildren() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/children/`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+
+        const data = await response.json();
+        console.log('Children response:', data);
+
+        const childrenList = document.getElementById('children-list');
+
+        // FIX: API returns array directly OR object with children property
+        const children = Array.isArray(data) ? data : (data.children || []);
+
+        if (children.length > 0) {
+            console.log(`Found ${children.length} children`);
+            childrenList.innerHTML = children.map(child => `
+                <div class="child-card" onclick="selectChild(${child.id}, '${child.first_name}', '${child.grade_level}')">
+                    <h3>${child.first_name} ${child.nickname ? `"${child.nickname}"` : ''}</h3>
+                    <p>Grade: ${child.grade_level}</p>
+                    <p>Language: ${child.preferred_language === 'es' ? 'Spanish' : 'English'}</p>
+                </div>
+            `).join('');
+        } else {
+            childrenList.innerHTML = '<p style="text-align: center; color: #6b7280;">No children yet. Add your first child!</p>';
+        }
+    } catch (error) {
+        console.error('Error loading children:', error);
+    }
+}
+
+function showAddChild() {
+    document.getElementById('add-child-modal').style.display = 'flex';
+}
+
+function closeAddChild() {
+    document.getElementById('add-child-modal').style.display = 'none';
+}
+
+async function createChild() {
+    const name = document.getElementById('child-name').value;
+    const nickname = document.getElementById('child-nickname').value;
+    const dob = document.getElementById('child-dob').value;
+    const grade = document.getElementById('child-grade').value;
+    const language = document.getElementById('child-language').value;
+    const pin = document.getElementById('child-pin').value;
+    const errorDiv = document.getElementById('child-error');
+
+    if (!name || !dob || !grade || !pin) {
+        errorDiv.textContent = 'Please fill in all required fields';
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/children/`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                first_name: name,
+                nickname: nickname || null,
+                date_of_birth: dob,
+                grade_level: grade,
+                preferred_language: language,
+                pin: pin
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            closeAddChild();
+
+            // Clear form
+            document.getElementById('child-name').value = '';
+            document.getElementById('child-nickname').value = '';
+            document.getElementById('child-dob').value = '';
+            document.getElementById('child-grade').value = '';
+            document.getElementById('child-pin').value = '';
+            document.getElementById('child-error').textContent = '';
+
+            // Reload children list
+            await loadChildren();
+        } else {
+            errorDiv.textContent = data.detail || 'Failed to create child';
+        }
+    } catch (error) {
+        console.error('Create child error:', error);
+        errorDiv.textContent = 'Connection error. Please try again.';
+    }
+}
+
+async function selectChild(childId, childName, gradeLevel) {
+    currentChild = { id: childId, name: childName, grade_level: gradeLevel };
+    await showChatSection();
+}
+
+function switchChild() {
+    document.getElementById('chat-section').style.display = 'none';
+    document.getElementById('child-section').style.display = 'flex';
+    currentChild = null;
+}
+
+async function showChatSection() {
+    document.getElementById('child-section').style.display = 'none';
+    document.getElementById('chat-section').style.display = 'flex';
+    document.getElementById('current-child-name').textContent = currentChild.name;
+    await loadFolders();
+}
+
+async function loadFolders() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/conversation/folders/${currentChild.id}`);
+        const data = await response.json();
+
+        const foldersList = document.getElementById('folders-list');
+
+        if (data.folders && data.folders.length > 0) {
+            foldersList.innerHTML = data.folders.map(folder => `
+                <div class="folder-item">${getFolderIcon(folder)} ${folder}</div>
+            `).join('');
+        } else {
+            foldersList.innerHTML = '<p style="text-align: center; color: #6b7280; font-size: 0.875rem;">No conversations yet</p>';
+        }
+    } catch (error) {
+        console.error('Error loading folders:', error);
+    }
+}
+
+function getFolderIcon(folder) {
+    const icons = {
+        'Math': '📐', 'Science': '🔬', 'History': '📜',
+        'English': '✍️', 'Geography': '🌍', 'Travel': '✈️', 'General': '💬'
+    };
+    return icons[folder] || '📁';
+}
+
+async function sendMessage() {
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const depthLevel = parseInt(document.getElementById('depth-level').value);
+    const sendBtn = document.getElementById('send-btn');
+
+    input.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="loading"></span>';
+
+    addMessage('user', message);
+    input.value = '';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/conversation/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                child_id: currentChild.id,
+                conversation_id: currentConversationId,
+                text: message,
+                current_depth: depthLevel
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            currentConversationId = data.conversation_id;
+            addMessage('assistant', data.text, data.source_label, data.sources);
+            loadFolders();
+        } else {
+            addMessage('assistant', `Sorry, error: ${data.detail}`);
+        }
+    } catch (error) {
+        addMessage('assistant', 'Connection error. Please try again.');
+    } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = 'Send';
+        input.focus();
+    }
+}
+
+function addMessage(role, text, sourceLabel = null, sources = null) {
+    const container = document.getElementById('messages-container');
+    const welcome = container.querySelector('.welcome-message');
+    if (welcome) welcome.remove();
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message message-${role}`;
+
+    let sourcesHtml = '';
+    if (sources && sources.length > 0) {
+        sourcesHtml = `<div class="sources-list"><h5>📚 Sources:</h5>${sources.map(s =>
+            `<div class="source-item">${s.title}</div>`
+        ).join('')}</div>`;
+    }
+
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            ${sourceLabel ? `<div class="source-label">${sourceLabel}</div>` : ''}
+            ${text.replace(/\n/g, '<br>')}
+            ${sourcesHtml}
+        </div>
+    `;
+
+    container.appendChild(messageDiv);
+    container.scrollTop = container.scrollHeight;
+}
+
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nia Learning Assistant - Demo</title>
+    <link rel="stylesheet" href="static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>🌟 Nia Learning Assistant</h1>
+                <p class="tagline">AI-powered tutoring for K-12 students</p>
+            </div>
+            <div id="user-info" class="user-info" style="display: none;">
+                <button onclick="showParentDashboard()" class="btn btn-secondary" style="margin-right: 1rem;">
+                    📊 Dashboard
+                </button>
+                <button onclick="toggleTheme()" class="btn btn-secondary" id="theme-toggle" style="margin-right: 1rem;">
+                    🌙
+                </button>
+                <span id="user-name"></span>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <!-- Auth Section -->
+        <div id="auth-section" class="auth-section">
+            <div class="auth-container">
+                <h2>Welcome to Nia</h2>
+                <p class="subtitle">Sign in or create an account to get started</p>
+
+                <div class="auth-tabs">
+                    <button class="tab-btn active" onclick="showTab('login')">Login</button>
+                    <button class="tab-btn" onclick="showTab('register')">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form" class="auth-form">
+                    <h3>Parent Login</h3>
+                    <input type="email" id="login-email" placeholder="Email" class="input">
+                    <input type="password" id="login-password" placeholder="Password" class="input">
+                    <button onclick="login()" class="btn btn-primary">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" class="auth-form" style="display: none;">
+                    <h3>Create Parent Account</h3>
+                    <input type="text" id="register-name" placeholder="Full Name" class="input">
+                    <input type="email" id="register-email" placeholder="Email" class="input">
+                    <input type="password" id="register-password" placeholder="Password (min 8 chars)" class="input">
+
+                    <div style="background: #f0f4ff; padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; text-align: left;">
+                        <label style="display: flex; align-items: start; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="consent-checkbox" style="margin-top: 0.25rem;">
+                            <span style="font-size: 0.875rem;">
+                                I am 18+ and the parent/guardian of the child(ren) I will register. I have read and agree to the
+                                <a href="static/legal/terms.html" target="_blank" style="color: #667eea;">Terms of Service</a> and
+                                <a href="static/legal/privacy.html" target="_blank" style="color: #667eea;">Privacy Policy</a>.
+                                I consent to the collection and use of my child's information for beta testing.
+                            </span>
+                        </label>
+                    </div>
+
+                    <button onclick="register()" class="btn btn-primary" id="register-btn">Create Account</button>
+                    <div id="register-error" class="error-message"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Parent Dashboard Section -->
+        <div id="dashboard-section" class="dashboard-section" style="display: none;">
+            <div class="dashboard-container">
+                <div class="dashboard-header">
+                    <h2>📊 Parent Dashboard</h2>
+                    <button onclick="closeDashboard()" class="btn btn-secondary">Back to Children</button>
+                </div>
+
+                <!-- Overview Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👶</div>
+                        <div class="stat-value" id="stat-children">-</div>
+                        <div class="stat-label">Children</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💬</div>
+                        <div class="stat-value" id="stat-conversations">-</div>
+                        <div class="stat-label">Conversations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✉️</div>
+                        <div class="stat-value" id="stat-messages">-</div>
+                        <div class="stat-label">Messages</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-value" id="stat-topics">-</div>
+                        <div class="stat-label">Topics Covered</div>
+                    </div>
+                </div>
+
+                <!-- Children Analytics -->
+                <div class="dashboard-content">
+                    <h3>Children Activity</h3>
+                    <div id="children-analytics" class="children-analytics"></div>
+                </div>
+
+                <!-- Recent Activity Chart -->
+                <div class="dashboard-content">
+                    <h3>Activity This Week</h3>
+                    <div id="activity-chart" class="activity-chart"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Child Detail View -->
+        <div id="child-detail-section" class="child-detail-section" style="display: none;">
+            <div class="dashboard-container">
+                <div class="dashboard-header">
+                    <h2 id="child-detail-name">Child Analytics</h2>
+                    <button onclick="backToDashboard()" class="btn btn-secondary">Back to Dashboard</button>
+                </div>
+
+                <!-- Child Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">💬</div>
+                        <div class="stat-value" id="child-stat-conversations">-</div>
+                        <div class="stat-label">Conversations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-value" id="child-stat-avg-messages">-</div>
+                        <div class="stat-label">Avg Messages/Chat</div>
+                    </div>
+                </div>
+
+                <!-- Topics Breakdown -->
+                <div class="dashboard-content">
+                    <h3>Topics Explored</h3>
+                    <div id="topics-breakdown" class="topics-breakdown"></div>
+                </div>
+
+                <!-- Recent Conversations -->
+                <div class="dashboard-content">
+                    <h3>Recent Conversations</h3>
+                    <div id="child-conversations" class="conversation-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Child Selection Section -->
+        <div id="child-section" class="child-section" style="display: none;">
+            <div class="child-container">
+                <h2>Select a Child</h2>
+                <div id="children-list" class="children-list"></div>
+                <button onclick="showAddChild()" class="btn btn-primary">+ Add New Child</button>
+            </div>
+        </div>
+
+        <!-- Add Child Modal -->
+        <div id="add-child-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeAddChild()">&times;</span>
+                <h3>Add New Child</h3>
+                <input type="text" id="child-name" placeholder="First Name" class="input">
+                <input type="text" id="child-nickname" placeholder="Nickname (optional)" class="input">
+                <input type="date" id="child-dob" placeholder="Date of Birth" class="input">
+                <select id="child-grade" class="input">
+                    <option value="">Select Grade Level</option>
+                    <option value="kindergarten">Kindergarten</option>
+                    <option value="1st grade">1st Grade</option>
+                    <option value="2nd grade">2nd Grade</option>
+                    <option value="3rd grade">3rd Grade</option>
+                    <option value="4th grade">4th Grade</option>
+                    <option value="5th grade">5th Grade</option>
+                    <option value="6th grade">6th Grade</option>
+                    <option value="7th grade">7th Grade</option>
+                    <option value="8th grade">8th Grade</option>
+                    <option value="9th grade">9th Grade</option>
+                    <option value="10th grade">10th Grade</option>
+                    <option value="11th grade">11th Grade</option>
+                    <option value="12th grade">12th Grade</option>
+                </select>
+                <select id="child-language" class="input">
+                    <option value="en">English</option>
+                    <option value="es">Spanish</option>
+                </select>
+                <input type="text" id="child-pin" placeholder="4-digit PIN" maxlength="4" class="input">
+                <button onclick="createChild()" class="btn btn-primary">Create Child Profile</button>
+                <div id="child-error" class="error-message"></div>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat-section" class="chat-section" style="display: none;">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3 id="current-child-name"></h3>
+                    <button onclick="switchChild()" class="btn btn-sm">Switch Child</button>
+                </div>
+
+                <div class="folders">
+                    <h4>Conversations by Subject</h4>
+                    <div id="folders-list" class="folders-list"></div>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-area">
+                <div class="chat-header">
+                    <h3>Chat with Nia 🌟</h3>
+                    <div class="depth-selector">
+                        <label>Depth Level:</label>
+                        <select id="depth-level" class="input-sm">
+                            <option value="1">Level 1 - Basic</option>
+                            <option value="2">Level 2 - Detailed</option>
+                            <option value="3">Level 3 - Comprehensive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="messages-container" class="messages-container">
+                    <div class="welcome-message">
+                        <h2>Hi! I'm Nia 🌟</h2>
+                        <p>I'm here to help you learn! Ask me anything about:</p>
+                        <ul>
+                            <li>📐 Math (fractions, multiplication, etc.)</li>
+                            <li>🔬 Science (photosynthesis, water cycle, etc.)</li>
+                            <li>📜 History (American Revolution, George Washington, etc.)</li>
+                            <li>✍️ English (grammar, writing, parts of speech)</li>
+                            <li>🌍 Geography (US states, world continents, etc.)</li>
+                        </ul>
+
+                        <!-- Example Questions -->
+                        <div class="example-questions">
+                            <h4>🌟 Try These Questions:</h4>
+                            <div class="question-chips">
+                                <div class="question-chip" onclick="askExample('How do I add fractions?')">
+                                    How do I add fractions?
+                                </div>
+                                <div class="question-chip" onclick="askExample('What is photosynthesis?')">
+                                    What is photosynthesis?
+                                </div>
+                                <div class="question-chip" onclick="askExample('Who was George Washington?')">
+                                    Who was George Washington?
+                                </div>
+                                <div class="question-chip" onclick="askExample('What are the parts of speech?')">
+                                    What are the parts of speech?
+                                </div>
+                                <div class="question-chip" onclick="askExample('What are the 5 US regions?')">
+                                    What are the 5 US regions?
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <textarea
+                        id="message-input"
+                        placeholder="Ask Nia a question..."
+                        class="chat-input"
+                        onkeypress="handleKeyPress(event)"
+                    ></textarea>
+                    <button onclick="sendMessage()" class="btn btn-primary" id="send-btn">
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conversation History Modal -->
+        <div id="conversation-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeConversationModal()">&times;</span>
+                <h3 id="modal-folder-name">Conversations</h3>
+                <div id="conversation-list" class="conversation-list"></div>
+            </div>
+        </div>
+
+        <!-- Full Conversation View Modal -->
+        <div id="full-conversation-modal" class="modal" style="display: none;">
+            <div class="modal-content modal-large">
+                <span class="close" onclick="closeFullConversation()">&times;</span>
+                <div class="modal-actions">
+                    <h3 id="full-conv-title">Conversation</h3>
+                    <button onclick="printConversation()" class="btn btn-sm">🖨️ Print</button>
+                </div>
+                <div id="full-conversation-content" class="full-conversation-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <script src="static/js/app.js"></script>
+</body>
+</html>
