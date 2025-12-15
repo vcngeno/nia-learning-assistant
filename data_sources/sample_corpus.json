@@ -1,0 +1,25 @@
+{
+  "documents": [
+    {
+      "id": "math_elem_001",
+      "subject": "Math",
+      "grade_level": "elementary",
+      "topic": "Division",
+      "content": "Division is splitting a number into equal groups. When we divide 10 by 2, we're asking 'how many groups of 2 can we make from 10?' The answer is 5 groups."
+    },
+    {
+      "id": "science_elem_001",
+      "subject": "Science",
+      "grade_level": "elementary",
+      "topic": "Plants",
+      "content": "Plants need three main things to grow: water, sunlight, and air. The roots drink water from the soil. The leaves catch sunlight to make food for the plant."
+    },
+    {
+      "id": "math_middle_001",
+      "subject": "Math",
+      "grade_level": "middle",
+      "topic": "Fractions",
+      "content": "A fraction represents part of a whole. The top number (numerator) shows how many parts you have. The bottom number (denominator) shows how many equal parts make up the whole."
+    }
+  ]
+}
