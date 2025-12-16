@@ -7,3 +7,4 @@ venv/
 .env
 .env.bak
 *.bak
+# Force redeploy Tue Dec 16 14:21:06 EST 2025
