@@ -5,6 +5,7 @@ from typing import List, Optional
 from passlib.context import CryptContext
 from jose import jwt, JWTError
 import os
+import logging
 
 from database import get_db
 from models import Parent, Child
@@ -12,6 +13,7 @@ from schemas import ChildCreate, ChildResponse
 
 router = APIRouter(prefix="/children", tags=["Children"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
@@ -35,7 +37,8 @@ def get_current_parent_id(authorization: Optional[str] = Header(None)) -> int:
         if not parent_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         return parent_id
-    except JWTError:
+    except JWTError as e:
+        logger.error(f"JWT decode error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 @router.post("/", response_model=ChildResponse, status_code=status.HTTP_201_CREATED)
@@ -45,6 +48,9 @@ def create_child(
     parent_id: int = Depends(get_current_parent_id)
 ):
     """Create a new child profile"""
+    logger.info(f"Creating child for parent_id: {parent_id}")
+    logger.info(f"Child data: {child.model_dump()}")
+
     parent = db.query(Parent).filter(Parent.id == parent_id).first()
 
     if not parent:
@@ -69,6 +75,7 @@ def create_child(
     db.commit()
     db.refresh(new_child)
 
+    logger.info(f"Child created successfully: {new_child.id}")
     return new_child
 
 @router.get("/", response_model=List[ChildResponse])
@@ -89,7 +96,7 @@ def get_child(
     """Get a specific child"""
     child = db.query(Child).filter(
         Child.id == child_id,
-        Child.parent_id == parent_id  # Security: only own children
+        Child.parent_id == parent_id
     ).first()
 
     if not child:
