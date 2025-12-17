@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from routers import conversation, auth, children, dashboard
-from database import engine
+from database import sync_engine
 from models import Base
 
 # Configure logging
@@ -47,8 +47,8 @@ async def startup_event():
     """Initialize database on startup"""
     logger.info("🌟 Nia is starting up...")
     try:
-        # Create all tables
-        Base.metadata.create_all(bind=engine)
+        # Create all tables using sync engine
+        Base.metadata.create_all(bind=sync_engine)
         logger.info("✅ Database tables created successfully")
     except Exception as e:
         logger.error(f"❌ Database error: {e}")
