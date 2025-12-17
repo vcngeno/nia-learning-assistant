@@ -72,7 +72,7 @@ export default function AddStudentPage() {
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border-2 p-8 space-y-6">
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-4 rounded-xl font-semibold">
+            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-4 rounded-xl font-semibold text-lg">
               {error}
             </div>
           )}
