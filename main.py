@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from routers import conversation, auth, children, dashboard
-from database import engine, init_db
+from database import engine
 from models import Base
 
 # Configure logging
@@ -50,21 +50,9 @@ async def startup_event():
         # Create all tables
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
-
-        # Run migrations
-        await init_db()
-        logger.info("✅ Migrations applied successfully")
-
     except Exception as e:
-        logger.error(f"❌ Startup error: {e}")
+        logger.error(f"❌ Database error: {e}")
         raise
-
-    # Try to ingest content (optional)
-    try:
-        from utils.content_ingestion import ingest_educational_content
-        await ingest_educational_content()
-    except Exception as e:
-        logger.warning(f"Content ingestion note: {e}")
 
     logger.info("✅ Nia API started successfully!")
 
