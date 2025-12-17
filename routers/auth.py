@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 import os
 
-# Correct import for python-jose
 from jose import jwt, JWTError
 
 from database import get_db
@@ -38,15 +37,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 @router.post("/parent/register", response_model=Token)
-async def register_parent(parent: ParentCreate, db: Session = Depends(get_db)):
+def register_parent(parent: ParentCreate, db: Session = Depends(get_db)):
     """Register a new parent account"""
     # Check if parent already exists
-    try:
-        from sqlalchemy import select
-        result = await db.execute(select(Parent).where(Parent.email == parent.email))
-        existing = result.scalar_one_or_none()
-    except AttributeError:
-        existing = db.query(Parent).filter(Parent.email == parent.email).first()
+    existing = db.query(Parent).filter(Parent.email == parent.email).first()
 
     if existing:
         raise HTTPException(
@@ -63,12 +57,8 @@ async def register_parent(parent: ParentCreate, db: Session = Depends(get_db)):
     )
 
     db.add(new_parent)
-    try:
-        await db.commit()
-        await db.refresh(new_parent)
-    except AttributeError:
-        db.commit()
-        db.refresh(new_parent)
+    db.commit()
+    db.refresh(new_parent)
 
     # Create access token
     access_token = create_access_token(data={"sub": str(new_parent.id), "type": "parent"})
@@ -82,14 +72,9 @@ async def register_parent(parent: ParentCreate, db: Session = Depends(get_db)):
     }
 
 @router.post("/parent/login", response_model=Token)
-async def login_parent(credentials: ParentLogin, db: Session = Depends(get_db)):
+def login_parent(credentials: ParentLogin, db: Session = Depends(get_db)):
     """Login parent account"""
-    try:
-        from sqlalchemy import select
-        result = await db.execute(select(Parent).where(Parent.email == credentials.email))
-        parent = result.scalar_one_or_none()
-    except AttributeError:
-        parent = db.query(Parent).filter(Parent.email == credentials.email).first()
+    parent = db.query(Parent).filter(Parent.email == credentials.email).first()
 
     if not parent or not verify_password(credentials.password, parent.hashed_password):
         raise HTTPException(
@@ -108,14 +93,9 @@ async def login_parent(credentials: ParentLogin, db: Session = Depends(get_db)):
     }
 
 @router.post("/child/login", response_model=dict)
-async def login_child(credentials: ChildLogin, db: Session = Depends(get_db)):
+def login_child(credentials: ChildLogin, db: Session = Depends(get_db)):
     """Login child with PIN"""
-    try:
-        from sqlalchemy import select
-        result = await db.execute(select(Child).where(Child.id == credentials.child_id))
-        child = result.scalar_one_or_none()
-    except AttributeError:
-        child = db.query(Child).filter(Child.id == credentials.child_id).first()
+    child = db.query(Child).filter(Child.id == credentials.child_id).first()
 
     if not child or not verify_password(credentials.pin, child.hashed_pin):
         raise HTTPException(

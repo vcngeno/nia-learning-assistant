@@ -1,7 +1,6 @@
-"""Conversation router without LSI (temporary)"""
+"""Conversation router"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import select
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -27,13 +26,9 @@ class MessageResponse(BaseModel):
     timestamp: datetime
 
 @router.post("/message", response_model=MessageResponse)
-async def send_message(message: MessageCreate, db: Session = Depends(get_db)):
+def send_message(message: MessageCreate, db: Session = Depends(get_db)):
     """Send message and get AI response"""
-    try:
-        result = await db.execute(select(Child).where(Child.id == message.child_id))
-        child = result.scalar_one_or_none()
-    except AttributeError:
-        child = db.query(Child).filter(Child.id == message.child_id).first()
+    child = db.query(Child).filter(Child.id == message.child_id).first()
 
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
@@ -46,18 +41,10 @@ async def send_message(message: MessageCreate, db: Session = Depends(get_db)):
             message_count=0
         )
         db.add(conversation)
-        try:
-            await db.commit()
-            await db.refresh(conversation)
-        except AttributeError:
-            db.commit()
-            db.refresh(conversation)
+        db.commit()
+        db.refresh(conversation)
     else:
-        try:
-            result = await db.execute(select(Conversation).where(Conversation.id == message.conversation_id))
-            conversation = result.scalar_one_or_none()
-        except AttributeError:
-            conversation = db.query(Conversation).filter(Conversation.id == message.conversation_id).first()
+        conversation = db.query(Conversation).filter(Conversation.id == message.conversation_id).first()
 
     user_message = Message(
         conversation_id=conversation.id,
@@ -93,12 +80,8 @@ async def send_message(message: MessageCreate, db: Session = Depends(get_db)):
     conversation.message_count += 2
     conversation.updated_at = datetime.utcnow()
 
-    try:
-        await db.commit()
-        await db.refresh(ai_message)
-    except AttributeError:
-        db.commit()
-        db.refresh(ai_message)
+    db.commit()
+    db.refresh(ai_message)
 
     return MessageResponse(
         id=ai_message.id,
@@ -108,16 +91,11 @@ async def send_message(message: MessageCreate, db: Session = Depends(get_db)):
     )
 
 @router.get("/conversations/{child_id}")
-async def get_conversations(child_id: int, db: Session = Depends(get_db)):
+def get_conversations(child_id: int, db: Session = Depends(get_db)):
     """Get conversations for a child"""
-    try:
-        query = select(Conversation).where(Conversation.child_id == child_id)
-        result = await db.execute(query.order_by(Conversation.updated_at.desc()))
-        conversations = result.scalars().all()
-    except AttributeError:
-        conversations = db.query(Conversation).filter(
-            Conversation.child_id == child_id
-        ).order_by(Conversation.updated_at.desc()).all()
+    conversations = db.query(Conversation).filter(
+        Conversation.child_id == child_id
+    ).order_by(Conversation.updated_at.desc()).all()
 
     return {"conversations": [
         {
