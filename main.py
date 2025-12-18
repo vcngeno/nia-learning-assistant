@@ -23,7 +23,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware - allow frontend to connect
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers with /api/v1 prefix
+# Include routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(children.router, prefix="/api/v1")
 app.include_router(conversation.router, prefix="/api/v1")
@@ -47,18 +47,34 @@ async def startup_event():
     """Initialize database on startup"""
     logger.info("🌟 Nia is starting up...")
     try:
-        # Create all tables using sync engine
+        # Create all tables
         Base.metadata.create_all(bind=sync_engine)
         logger.info("✅ Database tables created successfully")
+
+        # Run migration for hashed_pin
+        with sync_engine.connect() as conn:
+            result = conn.execute("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='children' AND column_name='hashed_pin'
+            """)
+
+            if not result.fetchone():
+                logger.info("Running migration: adding hashed_pin column...")
+                conn.execute("""
+                    ALTER TABLE children ADD COLUMN hashed_pin VARCHAR(255);
+                """)
+                conn.commit()
+                logger.info("✅ Migration complete!")
+
     except Exception as e:
-        logger.error(f"❌ Database error: {e}")
+        logger.error(f"❌ Startup error: {e}")
         raise
 
     logger.info("✅ Nia API started successfully!")
 
 @app.get("/")
 async def root():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "Nia Learning Assistant API",
@@ -67,7 +83,6 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Detailed health check"""
     return {
         "status": "healthy",
         "database": "connected",
