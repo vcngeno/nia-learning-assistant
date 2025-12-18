@@ -3,6 +3,7 @@ Nia Learning Assistant - Main FastAPI Application
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 import logging
 
 from routers import conversation, auth, children, dashboard
@@ -53,19 +54,19 @@ async def startup_event():
 
         # Run migration for hashed_pin
         with sync_engine.connect() as conn:
-            result = conn.execute("""
+            result = conn.execute(text("""
                 SELECT column_name
                 FROM information_schema.columns
                 WHERE table_name='children' AND column_name='hashed_pin'
-            """)
+            """))
 
             if not result.fetchone():
                 logger.info("Running migration: adding hashed_pin column...")
-                conn.execute("""
-                    ALTER TABLE children ADD COLUMN hashed_pin VARCHAR(255);
-                """)
+                conn.execute(text("ALTER TABLE children ADD COLUMN hashed_pin VARCHAR(255)"))
                 conn.commit()
                 logger.info("✅ Migration complete!")
+            else:
+                logger.info("✅ hashed_pin column already exists")
 
     except Exception as e:
         logger.error(f"❌ Startup error: {e}")
