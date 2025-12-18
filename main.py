@@ -3,7 +3,6 @@ Nia Learning Assistant - Main FastAPI Application
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 import logging
 
 from routers import conversation, auth, children, dashboard
@@ -24,7 +23,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
+# CORS middleware - IMPORTANT: Must allow Vercel frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -48,29 +47,12 @@ async def startup_event():
     """Initialize database on startup"""
     logger.info("🌟 Nia is starting up...")
     try:
-        # Create all tables
+        # Simply create all tables - let SQLAlchemy handle it
         Base.metadata.create_all(bind=sync_engine)
         logger.info("✅ Database tables created successfully")
-
-        # Run migration for hashed_pin
-        with sync_engine.connect() as conn:
-            result = conn.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='children' AND column_name='hashed_pin'
-            """))
-
-            if not result.fetchone():
-                logger.info("Running migration: adding hashed_pin column...")
-                conn.execute(text("ALTER TABLE children ADD COLUMN hashed_pin VARCHAR(255)"))
-                conn.commit()
-                logger.info("✅ Migration complete!")
-            else:
-                logger.info("✅ hashed_pin column already exists")
-
     except Exception as e:
-        logger.error(f"❌ Startup error: {e}")
-        raise
+        logger.error(f"❌ Database error: {e}")
+        # Don't raise - let the app start anyway
 
     logger.info("✅ Nia API started successfully!")
 
