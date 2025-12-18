@@ -17,7 +17,6 @@ class Parent(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     children = relationship("Child", back_populates="parent", cascade="all, delete-orphan")
 
 class Child(Base):
@@ -32,11 +31,12 @@ class Child(Base):
     grade_level = Column(String, nullable=False)
     hashed_pin = Column(String, nullable=False)
     preferred_language = Column(String, default="en")
-    learning_accommodations = Column(JSON, nullable=True)
+    learning_accommodations = Column(JSON, nullable=True, default=list)
+    is_active = Column(Boolean, default=True, nullable=False)
+    progress_level = Column(String, default="at grade level")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     parent = relationship("Parent", back_populates="children")
     conversations = relationship("Conversation", back_populates="child", cascade="all, delete-orphan")
 
@@ -52,7 +52,6 @@ class Conversation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relationships
     child = relationship("Child", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
 
@@ -62,10 +61,9 @@ class Message(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)  # 'user' or 'assistant'
+    role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    sources = Column(JSON, nullable=True)  # Source attribution for AI responses
+    sources = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationships
     conversation = relationship("Conversation", back_populates="messages")
